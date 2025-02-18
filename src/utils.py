@@ -268,6 +268,15 @@ def get_ranking_model() -> BaseDocumentCompressor:
         BaseDocumentCompressor: Base class for document compressors.
     """
 
+    from langchain_nvidia import register_model, Model
+    register_model(Model(
+            id="nvdev/nvidia/llama-3.2-nv-rerankqa-1b-v2",
+            model_type="ranking",
+            client="NVIDIARerank",
+            endpoint="https://ai.api.nvidia.com/v1/nvdev/retrieval/nvidia/llama-3_2-nv-rerankqa-1b-v2/reranking",
+        )
+    )
+
     settings = get_config()
 
     try:
