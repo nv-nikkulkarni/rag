@@ -1,0 +1,6 @@
+dependencies:
+- name: nv-ingest
+  repository: file://charts/nv-ingest
+  version: 0.4.4
+digest: sha256:f3f4f880dc94ec6b97ba3780336f5cd0926e527e57c3585542f6c007120a91ad
+generated: "2025-03-13T13:41:19.893104042Z"
