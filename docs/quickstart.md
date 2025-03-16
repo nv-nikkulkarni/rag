@@ -365,8 +365,10 @@ Use these procedures to deploy with Helm Chart to deploy on a Kubernetes cluster
 
 2. **Add NVIDIA Helm Repositories**
    ```sh
-   helm repo add nim-nvidia https://helm.ngc.nvidia.com/nim/nvidia/ --username='$oauthtoken' --password=$NGC_API_KEY
+   helm repo add nvidia-nim https://helm.ngc.nvidia.com/nim/nvidia/ --username='$oauthtoken' --password=$NGC_API_KEY
    helm repo add nim https://helm.ngc.nvidia.com/nim/ --username='$oauthtoken' --password=$NGC_API_KEY
+   helm repo add nemo-microservices https://helm.ngc.nvidia.com/nvidia/nemo-microservices --username='$oauthtoken' --password=$NGC_API_KEY
+   helm repo add baidu-nim https://helm.ngc.nvidia.com/nim/baidu --username='$oauthtoken' --password=$NGC_API_KEY
    ```
 
 3. **Update Helm Repositories**
@@ -377,6 +379,7 @@ Use these procedures to deploy with Helm Chart to deploy on a Kubernetes cluster
 4. **Update Dependencies for RAG Server**
    ```sh
    helm dependency update rag-server
+   helm dependency update rag-server/charts/ingestor-server
    ```
 
 #### Deploying End to End RAG Server + Ingestor Server (NV-Ingest)
@@ -544,7 +547,7 @@ To enable tracing and view the Zipkin or Grafana UI, follow these steps:
   Run the following command to port-forward the Forntend service to your local machine:
 
   ```sh
-  kubectl port-forward service/rag-frontend 3000:3000
+  kubectl port-forward -n rag service/rag-frontend 3000:3000 --address 0.0.0.0
   ```
 
   Access the Frontend UI at `http://localhost:3000`.
@@ -554,7 +557,7 @@ To enable tracing and view the Zipkin or Grafana UI, follow these steps:
   Run the following command to port-forward the Zipkin service to your local machine:
 
   ```sh
-  kubectl port-forward -n rag service/rag-zipkin 9411:9411
+  kubectl port-forward -n rag service/rag-zipkin 9411:9411 --address 0.0.0.0
   ```
 
   Access the Zipkin UI at `http://localhost:9411`.

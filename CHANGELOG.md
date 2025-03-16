@@ -30,6 +30,10 @@ This release adds support for multimodal documents using [Nvidia Ingest](https:/
   - [Query rewriting](./docs/query_rewriter.md) uses a smaller llama3.1-8b-instruct and is turned off by default.
   - Support to use conversation history during retrieval for low-latency  multiturn support.
 
+### Known Issues
+- The `rag-playground` container needs to be rebuild if the `APP_LLM_MODELNAME`, `APP_EMBEDDINGS_MODELNAME` or `APP_RANKING_MODELNAME` environment variable values are changed.
+- Optional features reflection, nemoguardrails and image captioning are not available in helm based deployment.
+
 A detailed guide is available [here](./docs/migration_guide.md) for easing developers experience, while migrating from older versions.
 
 ## [1.0.0] - 2025-01-15

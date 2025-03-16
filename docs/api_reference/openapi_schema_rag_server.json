@@ -17,8 +17,20 @@
           "Health APIs"
         ],
         "summary": "Health Check",
-        "description": "Perform a Health Check\n\nReturns 200 when service is up and includes health status of all services.",
+        "description": "Perform a Health Check\n\nArgs:\n    check_dependencies: If True, check health of all dependent services. \n                       If False (default), only report that the API service is up.\n\nReturns 200 when service is up and includes health status of all dependent services when requested.",
         "operationId": "health_check_health_get",
+        "parameters": [
+          {
+            "name": "check_dependencies",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "boolean",
+              "default": false,
+              "title": "Check Dependencies"
+            }
+          }
+        ],
         "responses": {
           "200": {
             "description": "Successful Response",
@@ -36,6 +48,16 @@
               "application/json": {
                 "example": {
                   "detail": "Internal server error occurred"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
                 }
               }
             }
@@ -72,16 +94,6 @@
               }
             }
           },
-          "422": {
-            "description": "Validation Error",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
-                }
-              }
-            }
-          },
           "499": {
             "description": "Client Closed Request",
             "content": {
@@ -98,6 +110,16 @@
               "application/json": {
                 "example": {
                   "detail": "Internal server error occurred"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
                 }
               }
             }
@@ -134,22 +156,22 @@
               }
             }
           },
-          "422": {
-            "description": "Validation Error",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
-                }
-              }
-            }
-          },
           "500": {
             "description": "Internal Server Error",
             "content": {
               "application/json": {
                 "example": {
                   "detail": "Internal server error occurred"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
                 }
               }
             }
@@ -186,16 +208,6 @@
               }
             }
           },
-          "422": {
-            "description": "Validation Error",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
-                }
-              }
-            }
-          },
           "499": {
             "description": "Client Closed Request",
             "content": {
@@ -212,6 +224,16 @@
               "application/json": {
                 "example": {
                   "detail": "Internal server error occurred"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
                 }
               }
             }
@@ -483,7 +505,7 @@
             "maxLength": 256,
             "title": "Embedding Model",
             "description": "Name of the embedding model used for vectorization.",
-            "default": "nvdev/nvidia/llama-3.2-nv-embedqa-1b-v2"
+            "default": "nvidia/llama-3.2-nv-embedqa-1b-v2"
           },
           "embedding_endpoint": {
             "type": "string",
@@ -497,7 +519,7 @@
             "maxLength": 256,
             "title": "Reranker Model",
             "description": "Name of the reranker model used for ranking results.",
-            "default": "nvdev/nvidia/llama-3.2-nv-rerankqa-1b-v2"
+            "default": "nvidia/llama-3.2-nv-rerankqa-1b-v2"
           },
           "reranker_endpoint": {
             "anyOf": [
@@ -576,8 +598,7 @@
               "user",
               "assistant",
               "system",
-              null
-            ],
+              null],
             "title": "Role",
             "description": "Role for a message: either 'user' or 'assistant' or 'system",
             "default": "user"
@@ -761,7 +782,7 @@
             "pattern": "[\\s\\S]*",
             "title": "Model",
             "description": "Name of NIM LLM model to be used for inference.",
-            "default": "nvdev/meta/llama-3.1-70b-instruct"
+            "default": "meta/llama-3.1-70b-instruct"
           },
           "llm_endpoint": {
             "type": "string",
@@ -775,7 +796,7 @@
             "maxLength": 256,
             "title": "Embedding Model",
             "description": "Name of the embedding model used for vectorization.",
-            "default": "nvdev/nvidia/llama-3.2-nv-embedqa-1b-v2"
+            "default": "nvidia/llama-3.2-nv-embedqa-1b-v2"
           },
           "embedding_endpoint": {
             "anyOf": [
@@ -796,7 +817,7 @@
             "maxLength": 256,
             "title": "Reranker Model",
             "description": "Name of the reranker model used for ranking results.",
-            "default": "nvdev/nvidia/llama-3.2-nv-rerankqa-1b-v2"
+            "default": "nvidia/llama-3.2-nv-rerankqa-1b-v2"
           },
           "reranker_endpoint": {
             "anyOf": [

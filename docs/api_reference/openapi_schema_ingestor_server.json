@@ -72,16 +72,6 @@
               }
             }
           },
-          "422": {
-            "description": "Validation Error",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
-                }
-              }
-            }
-          },
           "499": {
             "description": "Client Closed Request",
             "content": {
@@ -98,6 +88,16 @@
               "application/json": {
                 "example": {
                   "detail": "Internal server error occurred"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
                 }
               }
             }
@@ -132,16 +132,6 @@
               }
             }
           },
-          "422": {
-            "description": "Validation Error",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
-                }
-              }
-            }
-          },
           "499": {
             "description": "Client Closed Request",
             "content": {
@@ -158,6 +148,16 @@
               "application/json": {
                 "example": {
                   "detail": "Internal server error occurred"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
                 }
               }
             }
@@ -194,16 +194,6 @@
               }
             }
           },
-          "422": {
-            "description": "Validation Error",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
-                }
-              }
-            }
-          },
           "499": {
             "description": "Client Closed Request",
             "content": {
@@ -220,6 +210,16 @@
               "application/json": {
                 "example": {
                   "detail": "Internal server error occurred"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
                 }
               }
             }
@@ -270,16 +270,6 @@
               }
             }
           },
-          "422": {
-            "description": "Validation Error",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
-                }
-              }
-            }
-          },
           "499": {
             "description": "Client Closed Request",
             "content": {
@@ -296,6 +286,16 @@
               "application/json": {
                 "example": {
                   "detail": "Internal server error occurred"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
                 }
               }
             }
@@ -322,16 +322,6 @@
               }
             }
           },
-          "422": {
-            "description": "Validation Error",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
-                }
-              }
-            }
-          },
           "499": {
             "description": "Client Closed Request",
             "content": {
@@ -348,6 +338,16 @@
               "application/json": {
                 "example": {
                   "detail": "Internal server error occurred"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
                 }
               }
             }
@@ -410,16 +410,6 @@
               }
             }
           },
-          "422": {
-            "description": "Validation Error",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
-                }
-              }
-            }
-          },
           "499": {
             "description": "Client Closed Request",
             "content": {
@@ -436,6 +426,16 @@
               "application/json": {
                 "example": {
                   "detail": "Internal server error occurred"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
                 }
               }
             }
@@ -476,16 +476,6 @@
               }
             }
           },
-          "422": {
-            "description": "Validation Error",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
-                }
-              }
-            }
-          },
           "499": {
             "description": "Client Closed Request",
             "content": {
@@ -502,6 +492,16 @@
               "application/json": {
                 "example": {
                   "detail": "Internal server error occurred"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
                 }
               }
             }
@@ -527,21 +527,7 @@
             "title": "Data",
             "description": "JSON data in string format containing metadata about the documents which needs to be uploaded.",
             "examples": [
-              {
-                "collection_name": "multimodal_data",
-                "extraction_options": {
-                  "extract_text": true,
-                  "extract_tables": true,
-                  "extract_charts": true,
-                  "extract_images": false,
-                  "extract_method": "pdfium",
-                  "text_depth": "page"
-                },
-                "split_options": {
-                  "chunk_size": 1024,
-                  "chunk_overlap": 150
-                }
-              }
+              "{\"collection_name\": \"multimodal_data\", \"extraction_options\": {\"extract_text\": true, \"extract_tables\": true, \"extract_charts\": true, \"extract_images\": false, \"extract_method\": \"pdfium\", \"text_depth\": \"page\"}, \"split_options\": {\"chunk_size\": 1024, \"chunk_overlap\": 150}}"
             ]
           }
         },
@@ -567,21 +553,7 @@
             "title": "Data",
             "description": "JSON data in string format containing metadata about the documents which needs to be uploaded.",
             "examples": [
-              {
-                "collection_name": "multimodal_data",
-                "extraction_options": {
-                  "extract_text": true,
-                  "extract_tables": true,
-                  "extract_charts": true,
-                  "extract_images": false,
-                  "extract_method": "pdfium",
-                  "text_depth": "page"
-                },
-                "split_options": {
-                  "chunk_size": 1024,
-                  "chunk_overlap": 150
-                }
-              }
+              "{\"collection_name\": \"multimodal_data\", \"extraction_options\": {\"extract_text\": true, \"extract_tables\": true, \"extract_charts\": true, \"extract_images\": false, \"extract_method\": \"pdfium\", \"text_depth\": \"page\"}, \"split_options\": {\"chunk_size\": 1024, \"chunk_overlap\": 150}}"
             ]
           }
         },

@@ -2,8 +2,8 @@ apiVersion: v2
 appVersion: v2.0.0
 dependencies:
 - name: nv-ingest
-  repository: file://charts/nv-ingest
-  version: 0.4.4
+  repository: https://helm.ngc.nvidia.com/nvidia/nemo-microservices
+  version: 25.3.0
 description: Helm chart for the NVIDIA RAG Blueprint Ingestor Server
 name: ingestor-server
 type: application

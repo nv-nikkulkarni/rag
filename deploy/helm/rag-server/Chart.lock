@@ -10,7 +10,7 @@ dependencies:
   version: 1.3.0
 - name: nvidia-nim-llama-32-nv-embedqa-1b-v2
   repository: https://helm.ngc.nvidia.com/nim/nvidia
-  version: 1.3.0
+  version: 1.5.0
 - name: text-reranking-nim
   repository: https://helm.ngc.nvidia.com/nim/nvidia
   version: 1.3.0
@@ -23,5 +23,5 @@ dependencies:
 - name: kube-prometheus-stack
   repository: https://prometheus-community.github.io/helm-charts
   version: 69.7.2
-digest: sha256:c79d6cc31840ea92ecf4260b67151d8b2c2e45a815e6e4df9f2ad573db0e6160
-generated: "2025-03-13T11:56:32.238401344Z"
+digest: sha256:1e82dd371b0930400a5d373841cac671286f26937a3cb1c62b2490ae0c3248a4
+generated: "2025-03-16T17:51:30.540171532Z"
