@@ -94,3 +94,24 @@ Please contact your NVIDIA representative to get more credits.
 If you encounter any `password authentication failed` issues with the structured retriever container,
 consider removing the volumes directory located at `deploy/compose/volumes`.
 In this case, you may need to reprocess the data ingestion.
+
+## Node exporter pod crash with prometheus stack enabled in helm deployment
+
+If you experience issues with the `prometheus-node-exporter` pod crashing after enabling the `kube-prometheus-stack`, and you encounter an error message like:
+
+```sh
+msg="listen tcp 0.0.0.0:9100: bind: address already in use"
+```
+
+This error indicates that the port `9100` is already in use. To resolve this, you can update the port for `prometheus-node-exporter` in the `values.yaml` file.
+
+Update the following in `values.yaml`:
+
+```yaml
+kube-prometheus-stack:
+   # ... existing code ...
+  prometheus-node-exporter:
+    service:
+      port: 9101 # Changed from 9100 to 9101
+      targetPort: 9101  # Changed from 9100 to 9101
+```

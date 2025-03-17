@@ -378,8 +378,8 @@ Use these procedures to deploy with Helm Chart to deploy on a Kubernetes cluster
 
 4. **Update Dependencies for RAG Server**
    ```sh
-   helm dependency update rag-server
    helm dependency update rag-server/charts/ingestor-server
+   helm dependency update rag-server
    ```
 
 #### Deploying End to End RAG Server + Ingestor Server (NV-Ingest)
@@ -754,6 +754,8 @@ To use a custom Milvus endpoint, you need to update the `APP_VECTORSTORE_URL` en
       --set frontend.imagePullSecret.password="$NVIDIA_API_KEY"
       ```
 
+### Troubleshooting Helm Issues
+For troubleshooting issues with Helm deployment, checkout the troubleshooting section [here](./troubleshooting.md#node-exporter-pod-crash-with-prometheus-stack-enabled-in-helm-deployment).
 
 ## Data Ingestion
 
