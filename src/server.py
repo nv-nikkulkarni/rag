@@ -743,15 +743,16 @@ def prepare_citations(
                         description=doc.page_content
                     )
 
-            # Prepare citations basemodel
-            source_result = SourceResult(
-                content=content,
-                document_type=document_type,
-                document_name=file_name,
-                score=doc.metadata.get("relevance_score", 0),
-                metadata=source_metadata
-            )
-            citations.append(source_result)
+            if content and document_type in ["image", "text", "table", "chart"]:
+                # Prepare citations basemodel
+                source_result = SourceResult(
+                    content=content,
+                    document_type=document_type,
+                    document_name=file_name,
+                    score=doc.metadata.get("relevance_score", 0),
+                    metadata=source_metadata
+                )
+                citations.append(source_result)
 
     return Citations(
         total_results=len(citations),

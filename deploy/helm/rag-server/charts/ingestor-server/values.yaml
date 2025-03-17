@@ -67,8 +67,8 @@ nv-ingest:
   ngcImagePullSecret:
     create: false
   image:
-    repository: "nvcr.io/nvstaging/blueprint/nv-ingest"
-    tag: "25.03-RC4"
+    repository: "nvcr.io/nvidia/nemo-microservices/nv-ingest"
+    tag: "25.3.0"
   resources:
     limits:
       nvidia.com/gpu: 0
@@ -85,25 +85,25 @@ nv-ingest:
 
   paddleocr-nim:
     image:
-      repository: nvcr.io/nvidia/nemo-microservices/paddleocr
-      tag: "1.0.0"
+      repository: nvcr.io/nim/baidu/paddleocr
+      tag: "1.2.0"
     imagePullSecrets:
     - name: ngc-secret
 
   nemoretriever-graphic-elements-v1:
     image:
-      repository: "nvcr.io/nvidia/nemo-microservices/nemoretriever-graphic-elements-v1"
-      tag: "1.1"
+      repository: nvcr.io/nim/nvidia/nemoretriever-graphic-elements-v1
+      tag: "1.2.0"
 
   nemoretriever-page-elements-v2:
     image:
-      repository: "nvcr.io/nvidia/nemo-microservices/nv-yolox-page-elements-v1"
-      tag: "1.0.0"
+      repository: nvcr.io/nim/nvidia/nemoretriever-page-elements-v2
+      tag: "1.2.0"
 
   nemoretriever-table-structure-v1:
     image:
-      repository: "nvcr.io/nvstaging/blueprint/nemoretriever-table-structure-v1"
-      tag: "1.1.0-rc0-latest-datacenter-release-23597434"
+      repository: nvcr.io/nim/nvidia/nemoretriever-table-structure-v1
+      tag: "1.2.0"
 
   nim-vlm-text-extraction:
     image:
@@ -115,6 +115,9 @@ nv-ingest:
     deployed: false
 
   nvidia-nim-llama-32-nv-embedqa-1b-v2:
+    image:
+      repository: nvcr.io/nim/nvidia/llama-3.2-nv-embedqa-1b-v2
+      tag: "1.5.0"
     deployed: false
   milvus:
     image:

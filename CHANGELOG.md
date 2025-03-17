@@ -33,6 +33,7 @@ This release adds support for multimodal documents using [Nvidia Ingest](https:/
 ### Known Issues
 - The `rag-playground` container needs to be rebuild if the `APP_LLM_MODELNAME`, `APP_EMBEDDINGS_MODELNAME` or `APP_RANKING_MODELNAME` environment variable values are changed.
 - Optional features reflection, nemoguardrails and image captioning are not available in helm based deployment.
+- Uploading large files with .txt extension may fail during ingestion, we recommend splitting such files into smaller parts, to avoid this issue.
 
 A detailed guide is available [here](./docs/migration_guide.md) for easing developers experience, while migrating from older versions.
 
