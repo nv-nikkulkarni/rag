@@ -145,7 +145,7 @@ To deploy the `llama-3.1-8b-instruct` model in a separate namespace (`query-rewr
 Follow the steps from [Quick Start Helm Deployment](./quickstart.md#deploy-with-helm-chart) and use the following command to deploy the chart.
 
 ```bash
-helm install rag -n rag https://helm.ngc.nvidia.com/nvstaging/blueprint/charts/nvidia-blueprint-rag-v2.1.1.tgz \
+helm install rag -n rag https://helm.ngc.nvidia.com/nvstaging/blueprint/charts/nvidia-blueprint-rag-v2.1.0.tgz \
    --username '$oauthtoken' \
    --password "${NGC_API_KEY}" \
    --set imagePullSecret.password=$NGC_API_KEY \

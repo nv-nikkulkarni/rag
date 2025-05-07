@@ -154,5 +154,5 @@ If you encounter Out of Memory (OOM) errors during the ingestion process, enabli
 
 2. Upgrade your Helm release:
    ```bash
-   helm upgrade rag https://helm.ngc.nvidia.com/nvstaging/blueprint/charts/nvidia-blueprint-rag-v2.1.1.tgz -f rag-server/values.yaml -n rag
+   helm upgrade rag https://helm.ngc.nvidia.com/nvstaging/blueprint/charts/nvidia-blueprint-rag-v2.1.0.tgz -f rag-server/values.yaml -n rag
    ```
