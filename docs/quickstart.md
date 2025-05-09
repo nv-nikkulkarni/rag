@@ -439,8 +439,7 @@ helm repo add nvidia-nim https://helm.ngc.nvidia.com/nim/nvidia/ --username='$oa
 helm repo add nim https://helm.ngc.nvidia.com/nim/ --username='$oauthtoken' --password=$NGC_API_KEY
 helm repo add nemo-microservices https://helm.ngc.nvidia.com/nvidia/nemo-microservices --username='$oauthtoken' --password=$NGC_API_KEY
 helm repo add baidu-nim https://helm.ngc.nvidia.com/nim/baidu --username='$oauthtoken' --password=$NGC_API_KEY
-# Temporary for NV-Ingest RC artifacts
-helm repo add nvstaging-nim https://helm.ngc.nvidia.com/nvstaging/nim/ --username='$oauthtoken' --password=$NGC_API_KEY
+helm repo add nemo-microservices https://helm.ngc.nvidia.com/nvidia/nemo-microservices/ --username='$oauthtoken' --password=$NGC_API_KEY
 ```
 
 ##### Updating Helm Chart Dependencies

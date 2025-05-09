@@ -32,6 +32,7 @@ resources:
 
 envVars:
   EXAMPLE_PATH: "src/"
+  PROMPT_CONFIG_FILE: "/prompt.yaml"
 
   ##===MINIO specific configurations which is used to store the multimodal base64 content===
   MINIO_ENDPOINT: "rag-minio:9000"
