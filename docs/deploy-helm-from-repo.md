@@ -70,6 +70,18 @@ If you are working directly with the source Helm chart, and you want to customiz
     > Set the profile explicitly to avoid any errors with NIM LLM pod deployment.
 
 
+
+    > [!NOTE]
+    > The Bitnami project has moved certain Redis container artifacts, which might affect availability of some image tags. To use a supported and working version of Redis, you can override the Redis image with the following additional flags in your `helm upgrade` command:
+    >
+    > ```bash
+    > --set nv-ingest.redis.image.repository=bitnamilegacy/redis \
+    > --set nv-ingest.redis.image.tag=8.2.1-debian-12-r0 \
+    > ```
+    >
+    > This uses the Bitnami Legacy Redis 8.2.1-debian-12-r0 image. Adjust the tag as needed for your environment.
+
+
 6. Follow the remaining instructions in [Deploy on Kubernetes with Helm](./deploy-helm.md):
 
     - [Verify a Deployment](deploy-helm.md#verify-a-deployment)
