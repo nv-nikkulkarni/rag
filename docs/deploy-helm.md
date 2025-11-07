@@ -74,7 +74,7 @@ To deploy End-to-End RAG Server and Ingestor Server, use the following procedure
 
 
     > [!NOTE]
-    > The Bitnami project has moved certain Redis container artifacts, which might affect availability of some image tags. To use a supported and working version of Redis, you can override the Redis image with the following additional flags in your `helm upgrade` command:
+    > The Bitnami project has moved some Redis container artifacts, which can affect the availability of some image tags. To use a supported version of Redis, override the Redis image in your `helm upgrade` command as shown following. This uses the Bitnami Legacy Redis 8.2.1-debian-12-r0 image. Adjust the tag as needed for your environment.
     >
     > ```bash
     > --set nv-ingest.redis.image.repository=bitnamilegacy/redis \
