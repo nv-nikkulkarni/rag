@@ -72,8 +72,8 @@ from nvidia_rag.rag_server.validation import (
 )
 from nvidia_rag.rag_server.vlm import VLM
 from nvidia_rag.utils.common import (
+    ConfigProxy,
     filter_documents_by_confidence,
-    get_config,
     process_filter_expr,
     validate_filter_expr,
 )
@@ -88,10 +88,12 @@ from nvidia_rag.utils.vdb.vdb_base import VDBRag
 from observability.otel_metrics import OtelMetrics
 
 logger = logging.getLogger(__name__)
-CONFIG = get_config()
+CONFIG = ConfigProxy()
 
 # Get the model parameters from the config
 model_params = CONFIG.llm.get_model_parameters()
+default_min_tokens = model_params["min_tokens"]
+default_ignore_eos = model_params["ignore_eos"]
 default_max_tokens = model_params["max_tokens"]
 default_temperature = model_params["temperature"]
 default_top_p = model_params["top_p"]
@@ -163,6 +165,32 @@ class NvidiaRAG:
                     "vdb_op must be an instance of nvidia_rag.utils.vdb.vdb_base.VDBRag. "
                     "Please make sure all the required methods are implemented."
                 )
+
+    @staticmethod
+    def _eager_prefetch_stream(stream_gen):
+        """
+        Eagerly fetch the first chunk from a stream to trigger any errors early.
+
+        Args:
+            stream_gen: Generator to prefetch from
+
+        Returns:
+            Generator that yields the prefetched chunk followed by the rest
+
+        Raises:
+            StopIteration: If the stream is empty (converted to empty generator)
+        """
+        try:
+            first_chunk = next(stream_gen)
+
+            def complete_stream():
+                yield first_chunk
+                yield from stream_gen
+
+            return complete_stream()
+        except StopIteration:
+            logger.warning("LLM produced no output.")
+            return iter([])  # Return empty generator
 
     async def health(self, check_dependencies: bool = False) -> dict[str, Any]:
         """Check the health of the RAG server."""
@@ -237,6 +265,8 @@ class NvidiaRAG:
         use_knowledge_base: bool = True,
         temperature: float = default_temperature,
         top_p: float = default_top_p,
+        min_tokens: int = default_min_tokens,
+        ignore_eos: bool = default_ignore_eos,
         max_tokens: int = default_max_tokens,
         stop: list[str] = None,
         reranker_top_k: int = int(CONFIG.retriever.top_k),
@@ -272,6 +302,8 @@ class NvidiaRAG:
             use_knowledge_base: Whether to use knowledge base for generation
             temperature: Sampling temperature for generation
             top_p: Top-p sampling mass
+            min_tokens: Minimum tokens to generate
+            ignore_eos: Whether to generate tokens after the EOS token is generated
             max_tokens: Maximum tokens to generate
             stop: List of stop sequences
             reranker_top_k: Number of documents to return after reranking
@@ -332,6 +364,8 @@ class NvidiaRAG:
             "llm_endpoint": llm_endpoint,
             "temperature": temperature,
             "top_p": top_p,
+            "min_tokens": min_tokens,
+            "ignore_eos": ignore_eos,
             "max_tokens": max_tokens,
             "enable_guardrails": enable_guardrails,
             "stop": stop,
@@ -380,7 +414,7 @@ class NvidiaRAG:
 
     def search(
         self,
-        query: str,
+        query: str | list[dict[str, Any]],
         messages: list[dict[str, str]] = None,
         reranker_top_k: int = int(CONFIG.retriever.top_k),
         vdb_top_k: int = int(CONFIG.retriever.vdb_top_k),
@@ -401,7 +435,7 @@ class NvidiaRAG:
         It's called when the `/search` API is invoked.
 
         Args:
-            query (str): Query to be searched from vectorstore.
+            query (str | list[dict[str, Any]]): Query to be searched from vectorstore. Can be a string or multimodal content with text and images.
             messages (List[Dict[str, str]]): List of chat messages for context.
             reranker_top_k (int): Number of document chunks to retrieve after reranking.
             vdb_top_k (int): Number of top results to retrieve from vector database.
@@ -419,7 +453,10 @@ class NvidiaRAG:
             Citations: Retrieved documents.
         """
 
-        logger.info("Searching relevant document for the query: %s", query)
+        logger.info(
+            "Searching relevant document for the query: %s",
+            self._extract_text_from_content(query),
+        )
 
         vdb_op = self.__prepare_vdb_op(
             vdb_endpoint=vdb_endpoint,
@@ -554,14 +591,17 @@ class NvidiaRAG:
             top_k = vdb_top_k if local_ranker and enable_reranker else reranker_top_k
             logger.info("Setting top k as: %s.", top_k)
 
-            retriever_query = query
+            # Build retriever query from multimodal content (similar to generate method)
+            retriever_query, is_image_query = self._build_retriever_query_from_content(
+                query
+            )
             # Query used for specific tasks (filter generation, reflection) - stays clean without history concatenation
             processed_query = retriever_query
 
             # Handle multi-turn conversations with two different strategies:
             # 1. Query rewriting: Creates a standalone, context-aware query (good for both retrieval and tasks)
             # 2. Query combination: Concatenates history for retrieval, keeps original for specific tasks
-            if messages:
+            if messages and not is_image_query:
                 if enable_query_rewriting:
                     # conversation is tuple so it should be multiple of two
                     # -1 is to keep last k conversation
@@ -648,10 +688,12 @@ class NvidiaRAG:
                         for msg in messages
                         if msg.get("role") == "user"
                     ]
-                    retriever_query = ". ".join([*user_queries, query])
+                    retriever_query = ". ".join(
+                        [*user_queries, self._extract_text_from_content(query)]
+                    )
                     logger.info("Combined retriever query: %s", retriever_query)
 
-            if enable_filter_generator:
+            if enable_filter_generator and not is_image_query:
                 if CONFIG.vector_store.name != "milvus":
                     logger.warning(
                         f"Filter expression generator is currently only supported for Milvus. "
@@ -769,10 +811,9 @@ class NvidiaRAG:
                     )
                 return prepare_citations(retrieved_documents=docs, force_citations=True)
             else:
-                if local_ranker and enable_reranker:
+                if local_ranker and enable_reranker and not is_image_query:
                     logger.info(
-                        "Narrowing the collection from %s results and further narrowing it to %s with the reranker for rag"
-                        " chain.",
+                        "Narrowing the collection from %s results and further narrowing it to %s with the reranker for search",
                         top_k,
                         reranker_top_k,
                     )
@@ -837,17 +878,36 @@ class NvidiaRAG:
                     return prepare_citations(
                         retrieved_documents=docs, force_citations=True
                     )
-
-            docs = vdb_op.retrieval_langchain(
-                query=retriever_query,
-                collection_name=validated_collections[0],
-                vectorstore=vdb_op.get_langchain_vectorstore(validated_collections[0]),
-                top_k=top_k,
-                filter_expr=collection_filter_mapping.get(validated_collections[0], ""),
-                otel_ctx=otel_ctx,
-            )
-            # TODO: Check how to get the relevance score from milvus
-            return prepare_citations(retrieved_documents=docs, force_citations=True)
+                else:
+                    # Handle case where reranker is disabled or image query
+                    if is_image_query:
+                        docs = vdb_op.retrieval_image_langchain(
+                            query=retriever_query,
+                            collection_name=validated_collections[0],
+                            vectorstore=vdb_op.get_langchain_vectorstore(
+                                validated_collections[0]
+                            ),
+                            top_k=top_k,
+                            # Note: Filter expressions may not be supported for image queries
+                            # filter_expr=collection_filter_mapping.get(validated_collections[0], ""),
+                            # otel_ctx=otel_ctx,
+                        )
+                    else:
+                        docs = vdb_op.retrieval_langchain(
+                            query=retriever_query,
+                            collection_name=validated_collections[0],
+                            vectorstore=vdb_op.get_langchain_vectorstore(
+                                validated_collections[0]
+                            ),
+                            top_k=top_k,
+                            filter_expr=collection_filter_mapping.get(
+                                validated_collections[0], ""
+                            ),
+                            otel_ctx=otel_ctx,
+                        )
+                    return prepare_citations(
+                        retrieved_documents=docs, force_citations=True
+                    )
 
         except Exception as e:
             raise APIError(f"Failed to search documents. {str(e)}") from e
@@ -1005,11 +1065,16 @@ class NvidiaRAG:
             chain = (
                 prompt_template | llm | StreamingFilterThinkParser | StrOutputParser()
             )
+            # Create stream generator
+            stream_gen = chain.stream(
+                {"question": query_text}, config={"run_name": "llm-stream"}
+            )
+            # Eagerly fetch first chunk to trigger any errors before returning response
+            prefetched_stream = self._eager_prefetch_stream(stream_gen)
+
             return RAGResponse(
                 generate_answer(
-                    chain.stream(
-                        {"question": query_text}, config={"run_name": "llm-stream"}
-                    ),
+                    prefetched_stream,
                     [],
                     model=model,
                     collection_name=collection_name,
@@ -1039,8 +1104,15 @@ class NvidiaRAG:
             )
 
         except Exception as e:
-            logger.warning("Failed to generate response due to exception %s", e)
-            print_exc()
+            # Extract just the error type and message for cleaner logs
+            error_msg = str(e).split("\n")[0] if "\n" in str(e) else str(e)
+            logger.warning(
+                "Failed to generate response due to exception: %s", error_msg
+            )
+
+            # Only show full traceback at DEBUG level
+            if logger.getEffectiveLevel() <= logging.DEBUG:
+                print_exc()
 
             if "[403] Forbidden" in str(e) and "Invalid UAM response" in str(e):
                 logger.warning(
@@ -1080,7 +1152,7 @@ class NvidiaRAG:
             else:
                 return RAGResponse(
                     generate_answer(
-                        iter([f"{str(e)}"]),
+                        iter([str(e)]),
                         [],
                         model=model,
                         collection_name=collection_name,
@@ -1128,7 +1200,7 @@ class NvidiaRAG:
                     return True
         return False
 
-    def _build_retriever_query_from_content(self, content: Any) -> str:
+    def _build_retriever_query_from_content(self, content: Any) -> tuple[str, bool]:
         """Build retriever query from either string or multimodal content.
         For multimodal content, includes both text and base64 images for VLM embedding support.
 
@@ -1136,10 +1208,11 @@ class NvidiaRAG:
             content: Either a string or a list of content objects (multimodal)
 
         Returns:
-            str: Query string that may include base64 image data for VLM embeddings
+            tuple[str, bool]: Query string that may include base64 image data for VLM embeddings
+            bool: True if image URL is provided, False otherwise
         """
         if isinstance(content, str):
-            return content
+            return content, False
         elif isinstance(content, list):
             # Build multimodal query with both text and base64 images
             query_parts = []
@@ -1152,12 +1225,13 @@ class NvidiaRAG:
                     elif item.get("type") == "image_url":
                         image_url = item.get("image_url", {}).get("url", "")
                         if image_url:
-                            # Include the base64 image data for VLM embedding
-                            query_parts.append(image_url)
-            return "\n\n".join(query_parts)
+                            # If image URL is provided, return it as is
+                            return image_url, True
+            # If no image URL is provided, return the text content
+            return "\n\n".join(query_parts), False
         else:
             # Fallback for any other content type
-            return str(content) if content is not None else ""
+            return (str(content) if content is not None else ""), False
 
     def __rag_chain(
         self,
@@ -1345,15 +1419,17 @@ class NvidiaRAG:
             logger.debug("System message: %s", system_message)
             logger.debug("User message: %s", user_message)
             logger.debug("Conversation history: %s", conversation_history)
-            # Build retriever query from multimodal content (includes text and base64 images for VLM embedding)
-            retriever_query = self._build_retriever_query_from_content(query)
+            # for multimoda query only image is used for retrieval
+            retriever_query, is_image_query = self._build_retriever_query_from_content(
+                query
+            )
             # Query used for specific tasks (filter generation, reflection) - stays clean without history concatenation
             processed_query = retriever_query
 
             # Handle multi-turn conversations with two different strategies:
             # 1. Query rewriting: Creates a standalone, context-aware query (good for both retrieval and tasks)
             # 2. Query combination: Concatenates history for retrieval, keeps original for specific tasks
-            if chat_history:
+            if chat_history and not is_image_query:
                 if enable_query_rewriting:
                     # Based on conversation history recreate query for better
                     # document retrieval
@@ -1429,17 +1505,19 @@ class NvidiaRAG:
                 else:
                     # Query combination strategy: Concatenate history for better retrieval context
                     # Note: processed_query remains unchanged (original query) for clean task processing
-                    user_queries = [
+                    user_query_results = [
                         self._build_retriever_query_from_content(msg.get("content"))
                         for msg in chat_history
                         if msg.get("role") == "user"
                     ][-1:]
+                    # Extract just the query strings from the tuples
+                    user_queries = [query for query, _ in user_query_results]
                     # TODO: Find a better way to join this when queries already
                     # have punctuation
                     retriever_query = ". ".join([*user_queries, retriever_query])
                     logger.info("Combined retriever query: %s", retriever_query)
 
-            if enable_filter_generator:
+            if enable_filter_generator and not is_image_query:
                 if CONFIG.vector_store.name != "milvus":
                     logger.warning(
                         f"Filter expression generator is currently only supported for Milvus. "
@@ -1521,7 +1599,7 @@ class NvidiaRAG:
                     except Exception as e:
                         logger.warning(f"Error generating filter expression: {str(e)}")
 
-            if enable_query_decomposition:
+            if enable_query_decomposition and not is_image_query:
                 logger.info("Using query decomposition for complex query processing")
                 # TODO: Pass processed_query instead of query and check accuracy
                 return iterative_query_decomposition(
@@ -1575,7 +1653,8 @@ class NvidiaRAG:
                     )
             else:
                 otel_ctx = otel_context.get_current()
-                if ranker and enable_reranker:
+                # Current reranker is not supported for image query
+                if ranker and enable_reranker and not is_image_query:
                     logger.info(
                         "Narrowing the collection from %s results and further narrowing it to "
                         "%s with the reranker for rag chain.",
@@ -1649,19 +1728,34 @@ class NvidiaRAG:
                 else:
                     # Multiple retrievers are not supported when reranking is disabled
                     retrieval_start_time = time.time()
-                    docs = vdb_op.retrieval_langchain(
-                        query=retriever_query,
-                        collection_name=validated_collections[0],
-                        vectorstore=vdb_op.get_langchain_vectorstore(
-                            validated_collections[0]
-                        ),
-                        top_k=top_k,
-                        filter_expr=collection_filter_mapping.get(
-                            validated_collections[0], ""
-                        ),
-                        otel_ctx=otel_ctx,
-                    )
-                    context_to_show = docs
+                    if is_image_query:
+                        docs = vdb_op.retrieval_image_langchain(
+                            query=retriever_query,
+                            collection_name=validated_collections[0],
+                            vectorstore=vdb_op.get_langchain_vectorstore(
+                                validated_collections[0]
+                            ),
+                            top_k=top_k,
+                            # filter_expr=collection_filter_mapping.get(
+                            #     validated_collections[0], ""
+                            # ),
+                            # otel_ctx=otel_ctx,
+                        )
+                        context_to_show = docs
+                    else:
+                        docs = vdb_op.retrieval_langchain(
+                            query=retriever_query,
+                            collection_name=validated_collections[0],
+                            vectorstore=vdb_op.get_langchain_vectorstore(
+                                validated_collections[0]
+                            ),
+                            top_k=top_k,
+                            filter_expr=collection_filter_mapping.get(
+                                validated_collections[0], ""
+                            ),
+                            otel_ctx=otel_ctx,
+                        )
+                        context_to_show = docs
                     retrieval_time_ms = (time.time() - retrieval_start_time) * 1000
 
             if ranker and enable_reranker and confidence_threshold > 0.0:
@@ -1670,7 +1764,7 @@ class NvidiaRAG:
                     confidence_threshold=confidence_threshold,
                 )
 
-            if enable_vlm_inference:
+            if enable_vlm_inference or is_image_query:
                 # Fast pre-check: skip VLM entirely if no images in query or context
                 has_images_in_query = self._contains_images(query)
                 has_images_in_context = False
@@ -1844,12 +1938,17 @@ class NvidiaRAG:
                     status_code=ErrorCodeMapping.SUCCESS,
                 )
             else:
+                # Create stream generator
+                stream_gen = chain.stream(
+                    {"question": query, "context": docs},
+                    config={"run_name": "llm-stream"},
+                )
+                # Eagerly fetch first chunk to trigger any errors before returning response
+                prefetched_stream = self._eager_prefetch_stream(stream_gen)
+
                 return RAGResponse(
                     generate_answer(
-                        chain.stream(
-                            {"question": query, "context": docs},
-                            config={"run_name": "llm-stream"},
-                        ),
+                        prefetched_stream,
                         context_to_show,
                         model=model,
                         collection_name=collection_name,
@@ -1904,8 +2003,15 @@ class NvidiaRAG:
                 )
 
         except Exception as e:
-            logger.warning("Failed to generate response due to exception %s", e)
-            print_exc()
+            # Extract just the error type and message for cleaner logs
+            error_msg = str(e).split("\n")[0] if "\n" in str(e) else str(e)
+            logger.warning(
+                "Failed to generate response due to exception: %s", error_msg
+            )
+
+            # Only show full traceback at DEBUG level
+            if logger.getEffectiveLevel() <= logging.DEBUG:
+                print_exc()
 
             if "[403] Forbidden" in str(e) and "Invalid UAM response" in str(e):
                 logger.warning(
@@ -1949,11 +2055,7 @@ class NvidiaRAG:
             else:
                 return RAGResponse(
                     generate_answer(
-                        iter(
-                            [
-                                f"{str(e)}"
-                            ]
-                        ),
+                        iter([str(e)]),
                         [],
                         model=model,
                         collection_name=collection_name,

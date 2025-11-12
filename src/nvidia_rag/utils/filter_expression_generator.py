@@ -28,6 +28,8 @@ logger = logging.getLogger(__name__)
 def _format_metadata_schema_for_prompt(metadata_schema: list[dict[str, Any]]) -> str:
     """Format metadata schema for inclusion in the prompt.
 
+    Filters to user-defined fields only and removes internal flags.
+
     Args:
         metadata_schema: List of metadata field definitions
 
@@ -37,7 +39,20 @@ def _format_metadata_schema_for_prompt(metadata_schema: list[dict[str, Any]]) ->
     if not metadata_schema:
         return "No metadata schema available for this collection."
 
-    return json.dumps(metadata_schema, separators=(",", ":"))
+    # Filter to user-defined fields and fields that support dynamic filtering
+    # Remove internal keys (user_defined, support_dynamic_filtering)
+    filtered_schema = [
+        {
+            k: v
+            for k, v in field.items()
+            if k not in ("user_defined", "support_dynamic_filtering")
+        }
+        for field in metadata_schema
+        if field.get("user_defined", True)
+        or field.get("support_dynamic_filtering", True)
+    ]
+
+    return json.dumps(filtered_schema, separators=(",", ":"))
 
 
 def _extract_filter_expression_from_response(response: Any) -> str | None:

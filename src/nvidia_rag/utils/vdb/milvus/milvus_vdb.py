@@ -70,7 +70,8 @@ from pymilvus import (
 )
 from pymilvus.orm.types import CONSISTENCY_STRONG
 
-from nvidia_rag.utils.common import get_config
+from nvidia_rag.utils.common import ConfigProxy, get_config
+from nvidia_rag.utils.embedding import get_embedding_model
 from nvidia_rag.utils.vdb import DEFAULT_METADATA_SCHEMA_COLLECTION
 from nvidia_rag.utils.vdb.vdb_base import VDBRag
 
@@ -82,7 +83,7 @@ except ImportError:
     logger.warning("Optional nv_ingest_client module not installed.")
 
 
-CONFIG = get_config()
+CONFIG = ConfigProxy()
 
 
 class MilvusVDB(Milvus, VDBRag):
@@ -103,7 +104,11 @@ class MilvusVDB(Milvus, VDBRag):
 
         # Establish a single persistent connection for the lifetime of this instance
         try:
-            connections.connect(self.connection_alias, uri=self.vdb_endpoint)
+            connections.connect(
+                self.connection_alias,
+                uri=self.vdb_endpoint,
+                token=f"{CONFIG.vector_store.username}:{CONFIG.vector_store.password}",
+            )
             self._connected = True
             logger.debug(f"Connected to Milvus at {self.vdb_endpoint}")
         except Exception as e:
@@ -186,6 +191,8 @@ class MilvusVDB(Milvus, VDBRag):
             gpu_index=CONFIG.vector_store.enable_gpu_index,
             gpu_search=CONFIG.vector_store.enable_gpu_search,
             dense_dim=dimension,
+            username=CONFIG.vector_store.username,
+            password=CONFIG.vector_store.password,
         )
 
     def check_collection_exists(self, collection_name: str) -> bool:
@@ -200,7 +207,10 @@ class MilvusVDB(Milvus, VDBRag):
         """
         Get the metadata schema for a collection in the Milvus index.
         """
-        client = MilvusClient(self.vdb_endpoint)
+        client = MilvusClient(
+            self.vdb_endpoint,
+            token=f"{CONFIG.vector_store.username}:{CONFIG.vector_store.password}",
+        )
         entities = client.query(
             collection_name=collection_name, filter=filter, limit=1000
         )
@@ -290,7 +300,10 @@ class MilvusVDB(Milvus, VDBRag):
         """
         Delete the metadata schema from the collection.
         """
-        client = MilvusClient(self.vdb_endpoint)
+        client = MilvusClient(
+            self.vdb_endpoint,
+            token=f"{CONFIG.vector_store.username}:{CONFIG.vector_store.password}",
+        )
         if client.has_collection(collection_name):
             client.delete(collection_name=collection_name, filter=filter)
         else:
@@ -456,7 +469,10 @@ class MilvusVDB(Milvus, VDBRag):
         schema.add_field(field_name="metadata_schema", datatype=DataType.JSON)
 
         # Check if the metadata schema collection exists
-        client = MilvusClient(self.vdb_endpoint)
+        client = MilvusClient(
+            self.vdb_endpoint,
+            token=f"{CONFIG.vector_store.username}:{CONFIG.vector_store.password}",
+        )
         if not client.has_collection(DEFAULT_METADATA_SCHEMA_COLLECTION):
             # Create the metadata schema collection
             index_params = MilvusClient.prepare_index_params()
@@ -482,7 +498,10 @@ class MilvusVDB(Milvus, VDBRag):
         """
         Add metadata schema to a collection.
         """
-        client = MilvusClient(self.vdb_endpoint)
+        client = MilvusClient(
+            self.vdb_endpoint,
+            token=f"{CONFIG.vector_store.username}:{CONFIG.vector_store.password}",
+        )
 
         # Delete the metadata schema from the collection
         client.delete(
@@ -584,7 +603,10 @@ class MilvusVDB(Milvus, VDBRag):
             logger.info("Creating Langchain Milvus object for Hybrid search")
             vectorstore = LangchainMilvus(
                 self.embedding_model,
-                connection_args={"uri": self.vdb_endpoint},
+                connection_args={
+                    "uri": self.vdb_endpoint,
+                    "token": f"{CONFIG.vector_store.username}:{CONFIG.vector_store.password}",
+                },
                 builtin_function=BM25BuiltInFunction(
                     output_field_names="sparse", enable_match=True
                 ),
@@ -599,7 +621,10 @@ class MilvusVDB(Milvus, VDBRag):
             logger.debug("Index type for milvus: %s", CONFIG.vector_store.index_type)
             vectorstore = LangchainMilvus(
                 self.embedding_model,
-                connection_args={"uri": self.vdb_endpoint},
+                connection_args={
+                    "uri": self.vdb_endpoint,
+                    "token": f"{CONFIG.vector_store.username}:{CONFIG.vector_store.password}",
+                },
                 collection_name=collection_name,
                 index_params={
                     "index_type": CONFIG.vector_store.index_type,
@@ -622,6 +647,78 @@ class MilvusVDB(Milvus, VDBRag):
             f" Time to get langchain milvus vectorstore: {end_time - start_time:.4f} seconds"
         )
         return vectorstore
+
+    def retrieval_image_langchain(
+        self,
+        query: str,
+        collection_name: str,
+        vectorstore: LangchainMilvus = None,
+        top_k: int = 10,
+    ) -> list[Document]:
+        """Retrieve documents from a collection using langchain for image query.
+
+        Returns LangChain Document objects with metadata and collection name.
+        """
+        if vectorstore is None:
+            vectorstore = self.get_langchain_vectorstore(collection_name)
+
+        settings = get_config()
+        client = get_embedding_model(
+            model=settings.embeddings.model_name,
+            url=settings.embeddings.server_url,
+            truncate=None,  # Disable truncation for VLM embedding model
+        )
+
+        image_input = query
+
+        try:
+            embedding = client.embed_documents([image_input])
+            results = vectorstore.similarity_search_with_score_by_vector(
+                embedding=embedding[0],
+                k=top_k,
+            )
+        except Exception as e:
+            logger.error(
+                "Error generating embeddings or performing similarity search: %s", e
+            )
+            return []
+
+        try:
+            # ToDo: If no page number is provided, use content of same file (txt file)
+            metadata = results[0][0].metadata
+            source_name = metadata["source"]["source_name"]
+            page_number = metadata["content_metadata"]["page_number"]
+        except (KeyError, IndexError) as e:
+            logger.error("Error accessing metadata from search results: %s", e)
+            return []
+        filter_expr_partial = (
+            f'content_metadata["page_number"] == {page_number} and '
+            f'source["source_name"] like "%{source_name}%"'
+        )
+        try:
+            client = MilvusClient(self.vdb_endpoint)
+            entities = client.query(
+                collection_name=collection_name, filter=filter_expr_partial, limit=1000
+            )
+        except Exception as e:
+            logger.error("Error querying Milvus collection: %s", e)
+            return []
+        client = MilvusClient(self.vdb_endpoint)
+        entities = client.query(
+            collection_name=collection_name, filter=filter_expr_partial, limit=1000
+        )
+
+        # Convert Milvus entities to LangChain Document objects
+        docs: list[Document] = []
+        for item in entities:
+            page_content = item.get("text") or item.get("chunk") or ""
+            metadata = {
+                "source": item.get("source"),
+                "content_metadata": item.get("content_metadata", {}),
+            }
+            docs.append(Document(page_content=page_content, metadata=metadata))
+
+        return self._add_collection_name_to_retreived_docs(docs, collection_name)
 
     @staticmethod
     def _add_collection_name_to_retreived_docs(

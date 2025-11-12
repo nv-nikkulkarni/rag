@@ -1,6 +1,6 @@
 [project]
 name = "nvidia_rag"
-version = "2.3.0.dev"
+version = "2.4.0.dev"
 description = "This blueprint serves as a reference solution for a foundational Retrieval Augmented Generation (RAG) pipeline."
 readme = "README.md"
 license = "Apache-2.0"
@@ -20,10 +20,10 @@ dependencies = [
     "langchain>=0.3.27",
     "langchain-community>=0.3.27",
     "langchain-milvus>=0.2.1",
-    "langchain-nvidia-ai-endpoints>=0.3.17",
+    "langchain-nvidia-ai-endpoints>=0.3.18",
     "minio==7.2.15",
     "pdfplumber>=0.6",
-    "pydantic>=2.11.7",
+    "pydantic>=2.11.7,<=2.11.10",
     "pymilvus==2.5.8",
     "pymilvus-model==0.3.2",
     "python-multipart==0.0.18",
@@ -35,8 +35,8 @@ dependencies = [
     "langchain-elasticsearch==0.3.2",
     "lark>=1.2.2",
     "python-dateutil>=2.9.0.post0",
-    "nv-ingest-api==25.9.0",
-    "nv-ingest-client==25.9.0",
+    "nv-ingest-api==2025.11.11.dev20251111",
+    "nv-ingest-client==2025.11.11.dev20251111",
     "tritonclient==2.57.0",
 ]
 
@@ -137,3 +137,14 @@ quote-style = "double"
 indent-style = "space"
 skip-magic-trailing-comma = false
 line-ending = "auto"
+
+[dependency-groups]
+docs = [
+    "myst-parser>=4.0.1",
+    "nvidia-sphinx-theme>=0.0.8",
+    "sphinx>=8.2.3",
+    "sphinx-autobuild>=2025.8.25",
+    "sphinx-autodoc2>=0.5.0",
+    "sphinx-copybutton>=0.5.2",
+    "swagger-plugin-for-sphinx>=5.2.0",
+]

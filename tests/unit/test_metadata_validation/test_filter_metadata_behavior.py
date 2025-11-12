@@ -255,7 +255,7 @@ class TestFilterExpressionGeneratorIntegration:
         filter_expr = generate_filter_from_natural_language(
             user_request="Show me AI documents",
             collection_name="test_collection",
-            metadata_schema=realistic_schema.model_dump(),
+            metadata_schema=realistic_schema.model_dump()["schema"],
             prompt_template=prompt_template,
             llm=mock_llm,
         )
@@ -285,7 +285,7 @@ class TestFilterExpressionGeneratorIntegration:
         filter_expr = generate_filter_from_natural_language(
             user_request="Show me AI documents",
             collection_name="test_collection",
-            metadata_schema=invalid_schema.model_dump(),
+            metadata_schema=invalid_schema.model_dump()["schema"],
             prompt_template=prompt_template,
             llm=mock_llm,
         )
@@ -299,7 +299,7 @@ class TestFilterExpressionGeneratorIntegration:
         filter_expr2 = generate_filter_from_natural_language(
             user_request="Show me documents with nonexistent field",
             collection_name="test_collection",
-            metadata_schema=invalid_schema.model_dump(),
+            metadata_schema=invalid_schema.model_dump()["schema"],
             prompt_template=prompt_template,
             llm=mock_llm,
         )
@@ -334,7 +334,7 @@ class TestFilterExpressionGeneratorIntegration:
         filter_expr = generate_filter_from_natural_language(
             user_request="Show me high-rated documents",
             collection_name="test_collection",
-            metadata_schema=schema1.model_dump(),
+            metadata_schema=schema1.model_dump()["schema"],
             prompt_template=prompt_template,
             llm=mock_llm,
         )
@@ -366,7 +366,7 @@ class TestFilterExpressionGeneratorIntegration:
         improved_filter = generate_filter_from_natural_language(
             user_request="Show me urgent tech documents",
             collection_name="test_collection",
-            metadata_schema=realistic_schema.model_dump(),
+            metadata_schema=realistic_schema.model_dump()["schema"],
             prompt_template=prompt_template,
             llm=mock_llm,
             existing_filter_expr=existing_filter,
@@ -406,7 +406,7 @@ class TestFilterExpressionGeneratorIntegration:
             result = generate_filter_from_natural_language(
                 user_request="Show me AI documents",
                 collection_name="test_collection",
-                metadata_schema=realistic_schema.model_dump(),
+                metadata_schema=realistic_schema.model_dump()["schema"],
                 prompt_template=prompt_template,
                 llm=mock_llm_failure,
             )
@@ -939,7 +939,7 @@ class TestFilterProcessingPipeline:
         generated_filter = generate_filter_from_natural_language(
             user_request=user_request,
             collection_name="test_collection",
-            metadata_schema=realistic_schema.model_dump(),
+            metadata_schema=realistic_schema.model_dump()["schema"],
             prompt_template=prompt_template,
             llm=mock_llm,
         )
@@ -1020,7 +1020,7 @@ class TestFilterProcessingPipeline:
             generated_filter = generate_filter_from_natural_language(
                 user_request=test_case["input"],
                 collection_name="test_collection",
-                metadata_schema=realistic_schema.model_dump(),
+                metadata_schema=realistic_schema.model_dump()["schema"],
                 prompt_template=prompt_template,
                 llm=mock_llm,
             )
@@ -1268,7 +1268,7 @@ class TestErrorHandlingIntegration:
             result = generate_filter_from_natural_language(
                 user_request="Show me AI documents",
                 collection_name="test_collection",
-                metadata_schema=realistic_schema.model_dump(),
+                metadata_schema=realistic_schema.model_dump()["schema"],
                 prompt_template={
                     "system": "You are a filter expression generator.",
                     "human": "Test template",
@@ -1326,7 +1326,7 @@ class TestErrorHandlingIntegration:
         filter_expr = generate_filter_from_natural_language(
             user_request="Show me urgent tech documents with high rating",
             collection_name="test_collection",
-            metadata_schema=schema.model_dump(),
+            metadata_schema=schema.model_dump()["schema"],
             prompt_template=prompt_template,
             llm=mock_llm,
         )
@@ -1385,7 +1385,7 @@ class TestErrorHandlingIntegration:
                 result = generate_filter_from_natural_language(
                     user_request=case["user_request"],
                     collection_name="test_collection",
-                    metadata_schema=realistic_schema.model_dump(),
+                    metadata_schema=realistic_schema.model_dump()["schema"],
                     prompt_template=prompt_template,
                     llm=mock_llm,
                 )
@@ -1457,7 +1457,7 @@ class TestErrorHandlingIntegration:
                 result = generate_filter_from_natural_language(
                     user_request=f"Show me documents from thread {thread_id}",
                     collection_name=f"collection_{thread_id}",
-                    metadata_schema=realistic_schema.model_dump(),
+                    metadata_schema=realistic_schema.model_dump()["schema"],
                     prompt_template=prompt_template,
                     llm=mock_llm,
                 )
@@ -1533,7 +1533,7 @@ class TestErrorHandlingIntegration:
             result = generate_filter_from_natural_language(
                 user_request=f"Show me documents from iteration {iteration}",
                 collection_name="test_collection",
-                metadata_schema=large_schema.model_dump(),
+                metadata_schema=large_schema.model_dump()["schema"],
                 prompt_template=prompt_template,
                 llm=mock_llm,
             )

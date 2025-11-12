@@ -334,9 +334,10 @@ filter_expression_generator_prompt:
         * Example: content_metadata["created_at"] >= "2024-01-01T00:00:00"
     4.  **Boolean**: ==, !=
         * Example: content_metadata["is_public"] == true
-    5.  **Array**: array_contains, array_contains_any, array_length
-        * Example: array_contains_any(content_metadata["regions"], ["EMEA", "APAC"])
-        * **CRITICAL:** Only use these functions for arrays.
+    5.  **Array**: array_contains, array_contains_any, array_contains_all, array_length
+        * Single value: array_contains(content_metadata["category"], "AI")
+        * Multiple values (any): array_contains_any(content_metadata["regions"], ["EMEA", "APAC"])
+        * Multiple values (all): array_contains_all(content_metadata["tags"], ["urgent", "review"])
 
     ### Intelligent Mapping Examples ###
 

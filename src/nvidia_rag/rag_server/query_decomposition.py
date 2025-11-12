@@ -31,7 +31,10 @@ from nvidia_rag.rag_server.response_generator import (
     RAGResponse,
     generate_answer,
 )
-from nvidia_rag.utils.common import filter_documents_by_confidence, get_config
+from nvidia_rag.utils.common import (
+    ConfigProxy,
+    filter_documents_by_confidence,
+)
 from nvidia_rag.utils.llm import get_llm, get_prompts
 from nvidia_rag.utils.vdb.vdb_base import VDBRag
 
@@ -39,8 +42,7 @@ from nvidia_rag.utils.vdb.vdb_base import VDBRag
 logger = logging.getLogger(__name__)
 
 # Configuration
-config = get_config()
-RECURSION_DEPTH = config.query_decomposition.recursion_depth
+CONFIG = ConfigProxy()
 # While merging the context, documents should be limited to this number to avoid llm
 # TODO: configure this from config
 MAX_DOCUMENTS_FOR_GENERATION = 20
@@ -66,7 +68,7 @@ def format_conversation_history(history: list[tuple[str, str]]) -> str:
 def normalize_relevance_scores(
     documents: list[Document],
     filter_docs: bool = True,
-    confidence_threshold: float = config.default_confidence_threshold,
+    confidence_threshold: float = CONFIG.default_confidence_threshold,
 ) -> list[Document]:
     """
     Normalize relevance scores in a list of documents to be between 0 and 1 using sigmoid function.
@@ -240,9 +242,9 @@ def retrieve_and_rank_documents(
     original_query: str,
     vdb_op: VDBRag,
     ranker: NVIDIARerank | None,
-    collection_name: str = config.vector_store.default_collection_name,
-    top_k: int = config.retriever.top_k,
-    ranker_top_k: int = config.retriever.top_k,
+    collection_name: str = CONFIG.vector_store.default_collection_name,
+    top_k: int = CONFIG.retriever.top_k,
+    ranker_top_k: int = CONFIG.retriever.top_k,
 ) -> list[Document]:
     """
     Retrieve and optionally rerank documents for a query.
@@ -374,10 +376,10 @@ def process_subqueries(
     llm: ChatNVIDIA,
     vdb_op: VDBRag,
     ranker: NVIDIARerank | None,
-    collection_name: str = config.vector_store.default_collection_name,
-    top_k: int = config.retriever.top_k,
-    ranker_top_k: int = config.retriever.top_k,
-    confidence_threshold: float = config.default_confidence_threshold,
+    collection_name: str = CONFIG.vector_store.default_collection_name,
+    top_k: int = CONFIG.retriever.top_k,
+    ranker_top_k: int = CONFIG.retriever.top_k,
+    confidence_threshold: float = CONFIG.default_confidence_threshold,
     history: list[tuple[str, str]] | None = None,
 ) -> tuple[list[tuple[str, str]], list[Document]]:
     """
@@ -501,12 +503,12 @@ def iterative_query_decomposition(
     llm: ChatNVIDIA,
     vdb_op: VDBRag,
     ranker: NVIDIARerank | None = None,
-    recursion_depth: int = config.query_decomposition.recursion_depth,
+    recursion_depth: int = CONFIG.query_decomposition.recursion_depth,
     enable_citations: bool = True,
-    collection_name: str = config.vector_store.default_collection_name,
-    top_k: int = config.retriever.top_k,
-    ranker_top_k: int = config.retriever.top_k,
-    confidence_threshold: float = config.default_confidence_threshold,
+    collection_name: str = CONFIG.vector_store.default_collection_name,
+    top_k: int = CONFIG.retriever.top_k,
+    ranker_top_k: int = CONFIG.retriever.top_k,
+    confidence_threshold: float = CONFIG.default_confidence_threshold,
     llm_settings: dict[str, Any] | None = None,
 ):
     """

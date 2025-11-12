@@ -26,7 +26,7 @@ import logging
 import os
 from collections.abc import Callable
 from concurrent.futures import ThreadPoolExecutor
-from functools import wraps
+from functools import lru_cache, wraps
 from typing import Any
 from uuid import uuid4
 
@@ -139,14 +139,67 @@ def utils_cache(func: Callable) -> Callable:
     return wrapper
 
 
-# @lru_cache
+@lru_cache
 def get_config() -> "ConfigWizard":
-    """Parse the application configuration."""
+    """Parse and return the application configuration.
+
+    Returns a cached singleton instance that can be modified at runtime.
+    Config objects are mutable, enabling dynamic configuration changes.
+    """
     config_file = os.environ.get("APP_CONFIG_FILE", "/dev/null")
     config = configuration.AppConfig.from_file(config_file)
     if config:
         return config
     raise RuntimeError("Unable to find configuration.")
+
+
+def reload_config() -> "ConfigWizard":
+    """Clear the config cache and reload from environment variables.
+
+    Use this when you've changed environment variables after the initial
+    config load and want to pick up the new values.
+
+    Returns:
+        ConfigWizard: Freshly loaded configuration object
+
+    Example:
+        >>> import os
+        >>> from nvidia_rag.utils.common import get_config, reload_config
+        >>> config = get_config()
+        >>> os.environ["APP_LLM_MODELNAME"] = "new-model"
+        >>> config = reload_config()  # Picks up new env var
+    """
+    get_config.cache_clear()
+    return get_config()
+
+
+class ConfigProxy:
+    """Proxy that always returns the current configuration state.
+
+    Enables dynamic configuration changes to be reflected everywhere.
+    """
+
+    __slots__ = ()
+
+    def __getattr__(self, name: str) -> Any:
+        """Retrieve attribute from current config."""
+        return getattr(get_config(), name)
+
+    def __setattr__(self, name: str, value: Any) -> None:
+        """Set attribute on current config."""
+        setattr(get_config(), name, value)
+
+    def __repr__(self) -> str:
+        """Return string representation."""
+        return repr(get_config())
+
+    def __str__(self) -> str:
+        """Return string conversion."""
+        return str(get_config())
+
+    def __dir__(self) -> list[str]:
+        """Return available attributes."""
+        return dir(get_config())
 
 
 def combine_dicts(dict_a: dict[str, Any], dict_b: dict[str, Any]) -> dict[str, Any]:
@@ -193,12 +246,11 @@ def sanitize_nim_url(url: str, model_name: str, model_type: str) -> str:
         logger.info(
             f"{model_type} URL does not start with http(s)://, adding it: {url}"
         )
+    # TODO: Check for v1 on url.endswith
 
     # Register model only if URL is hosted on NVIDIA's known endpoints
-    if (
-        url.startswith("https://integrate.api.nvidia.com")
-        or url.startswith("https://ai.api.nvidia.com")
-        or url.startswith("https://api.nvcf.nvidia.com")
+    if url.startswith("https://ai.api.nvidia.com") or url.startswith(
+        "https://api.nvcf.nvidia.com"
     ):
         if model_type == "embedding":
             client = "NVIDIAEmbeddings"
@@ -223,11 +275,18 @@ def sanitize_nim_url(url: str, model_name: str, model_type: str) -> str:
 
 def get_metadata_configuration(
     collection_name: str,
-    custom_metadata: list[dict[str, Any]] = None,
-    all_file_paths: list[str] = None,
+    custom_metadata: list[dict[str, Any]] | None = None,
+    all_file_paths: list[str] | None = None,
+    metadata_schema: list[dict[str, Any]] | None = None,
 ):
     """
     Get the metadata configuration for a document.
+
+    Args:
+        collection_name: Name of the collection
+        custom_metadata: User-provided metadata
+        all_file_paths: List of file paths
+        metadata_schema: Optional metadata schema for checking user_defined flags
     """
     config = get_config()
 
@@ -243,13 +302,17 @@ def get_metadata_configuration(
         all_file_paths=all_file_paths,
         csv_file_path=csv_file_path,
         custom_metadata=custom_metadata or [],
+        metadata_schema=metadata_schema or [],
     )
 
     return csv_file_path, meta_source_field, meta_fields
 
 
 def prepare_custom_metadata_dataframe(
-    all_file_paths: list[str], csv_file_path: str, custom_metadata: list[dict[str, Any]]
+    all_file_paths: list[str],
+    csv_file_path: str,
+    custom_metadata: list[dict[str, Any]],
+    metadata_schema: list[dict[str, Any]] | None = None,
 ) -> tuple[str, list[str]]:
     """
     Prepare custom metadata for a document and write it to a dataframe in csv format
@@ -258,9 +321,17 @@ def prepare_custom_metadata_dataframe(
         - meta_source_field: str - Source field name
         - all_metadata_fields: List[str] - All metadata fields
     """
+    if metadata_schema is None:
+        metadata_schema = []
+
     # Handle case where no file paths are provided (e.g., during collection deletion)
     if all_file_paths is None:
         all_file_paths = []
+
+    # Build a map of field_name -> user_defined flag from schema
+    schema_flags = {
+        field["name"]: field.get("user_defined", True) for field in metadata_schema
+    }
 
     meta_source_field = "source"
     custom_metadata_df_dict = {
@@ -278,7 +349,16 @@ def prepare_custom_metadata_dataframe(
 
     all_metadata_fields.add("filename")
 
+    # Track which fields are actually included in the CSV
+    included_fields = []
+
     for metadata_field in all_metadata_fields:
+        # Skip auto-extracted fields (user_defined=False) entirely
+        # Let nv-ingest extract these fields
+        is_user_defined = schema_flags.get(metadata_field, True)
+        if not is_user_defined:
+            continue
+
         metadata_list = []
         for file_path in all_file_paths:
             filename = os.path.basename(file_path)
@@ -297,13 +377,17 @@ def prepare_custom_metadata_dataframe(
                 value = None
 
             metadata_list.append(value)
-        custom_metadata_df_dict[metadata_field] = metadata_list
+
+        # Only add column if it has values
+        if metadata_list:
+            custom_metadata_df_dict[metadata_field] = metadata_list
+            included_fields.append(metadata_field)
 
     # Write to csv
     df = pd.DataFrame(custom_metadata_df_dict)
     df.to_csv(csv_file_path)
 
-    return meta_source_field, [*all_metadata_fields]
+    return meta_source_field, included_fields
 
 
 def validate_filter_expr(

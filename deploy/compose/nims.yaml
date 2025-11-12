@@ -91,7 +91,7 @@ services:
       timeout: 20s
       retries: 3
       start_period: 10m
-    profiles: ["vlm-embed"]
+    profiles: ["vlm-embed", "vlm-ingest"]
 
   nemoretriever-ranking-ms:
     container_name: nemoretriever-ranking-ms
@@ -157,7 +157,7 @@ services:
               device_ids: ['${YOLOX_MS_GPU_ID:-0}']
               capabilities: [gpu]
     runtime: nvidia
-    profiles: ["", "ingest"]
+    profiles: ["", "ingest", "vlm-ingest"]
 
   graphic-elements:
     image: ${YOLOX_GRAPHIC_ELEMENTS_IMAGE:-nvcr.io/nim/nvidia/nemoretriever-graphic-elements-v1}:${YOLOX_GRAPHIC_ELEMENTS_TAG:-1.5.0}
@@ -184,7 +184,7 @@ services:
               device_ids: ['${YOLOX_GRAPHICS_MS_GPU_ID:-0}']
               capabilities: [gpu]
     runtime: nvidia
-    profiles: ["", "ingest"]
+    profiles: ["", "ingest", "vlm-ingest"]
 
   table-structure:
     image: ${YOLOX_TABLE_STRUCTURE_IMAGE:-nvcr.io/nim/nvidia/nemoretriever-table-structure-v1}:${YOLOX_TABLE_STRUCTURE_TAG:-1.5.0}
@@ -211,7 +211,7 @@ services:
               device_ids:  ['${YOLOX_TABLE_MS_GPU_ID:-0}']
               capabilities: [gpu]
     runtime: nvidia
-    profiles: ["", "ingest"]
+    profiles: ["", "ingest", "vlm-ingest"]
 
   paddle:
     image: ${PADDLE_IMAGE:-nvcr.io/nim/baidu/paddleocr}:${PADDLE_TAG:-1.5.0}
@@ -237,7 +237,7 @@ services:
               device_ids:  ['${OCR_MS_GPU_ID:-${PADDLE_MS_GPU_ID:-0}}']
               capabilities: [gpu]
     runtime: nvidia
-    profiles: ["", "ingest"]
+    profiles: ["", "ingest", "vlm-ingest"]
 
   nemoretriever-ocr:
     image: ${NEMORETRIEVER_OCR_IMAGE:-nvcr.io/nvidia/nemo-microservices/nemoretriever-ocr-v1}:${NEMORETRIEVER_OCR_TAG:-1.1.0}

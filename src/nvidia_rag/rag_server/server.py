@@ -46,20 +46,26 @@ from nvidia_rag.rag_server.response_generator import (
     ChainResponse,
     Citations,
     ErrorCodeMapping,
+    ImageContent,
     Message,
+    TextContent,
     error_response_generator,
 )
-from nvidia_rag.utils.common import get_config
+from nvidia_rag.utils.common import ConfigProxy
 
 logging.basicConfig(level=os.environ.get("LOGLEVEL", "INFO").upper())
 logger = logging.getLogger(__name__)
 
-settings = get_config()
-model_params = settings.llm.get_model_parameters()
+CONFIG = ConfigProxy()
+model_params = CONFIG.llm.get_model_parameters()
+default_min_tokens = model_params["min_tokens"]
+default_ignore_eos = model_params["ignore_eos"]
 default_max_tokens = model_params["max_tokens"]
 default_temperature = model_params["temperature"]
 default_top_p = model_params["top_p"]
 
+logger.debug(f"default_min_tokens: {default_min_tokens}")
+logger.debug(f"default_ignore_eos: {default_ignore_eos}")
 logger.debug(f"default_max_tokens: {default_max_tokens}")
 logger.debug(f"default_temperature: {default_temperature}")
 logger.debug(f"default_top_p: {default_top_p}")
@@ -99,12 +105,11 @@ app.add_middleware(
 
 NVIDIA_RAG = NvidiaRAG()
 
-settings = get_config()
 metrics = None
-if settings.tracing.enabled:
+if CONFIG.tracing.enabled:
     from .tracing import instrument
 
-    metrics = instrument(app, settings)
+    metrics = instrument(app, CONFIG)
 
 
 def validate_confidence_threshold_field(confidence_threshold: float) -> float:
@@ -155,6 +160,16 @@ class Prompt(BaseModel):
         ge=0.1,
         le=1.0,
     )
+    min_tokens: int = Field(
+        default_min_tokens,
+        description="The minimum number of tokens to generate in any given call",
+    )
+
+    ignore_eos: bool = Field(
+        default_ignore_eos,
+        description="Whether to ignore the EOS token and continue generating tokens after the EOS token is generated",
+    )
+
     max_tokens: int = Field(
         default_max_tokens,
         description="The maximum number of tokens to generate in any given call. "
@@ -166,14 +181,14 @@ class Prompt(BaseModel):
     )
     reranker_top_k: int = Field(
         description="The maximum number of documents to return in the response.",
-        default=settings.retriever.top_k,
+        default=CONFIG.retriever.top_k,
         ge=0,
         le=25,
         format="int64",
     )
     vdb_top_k: int = Field(
         description="Number of top results to retrieve from the vector database.",
-        default=settings.retriever.vdb_top_k,
+        default=CONFIG.retriever.vdb_top_k,
         ge=0,
         le=400,
         format="int64",
@@ -185,7 +200,7 @@ class Prompt(BaseModel):
     # )
     vdb_endpoint: str = Field(
         description="Endpoint url of the vector database server.",
-        default=settings.vector_store.url,
+        default=CONFIG.vector_store.url,
     )
     # TODO: Remove this field in the future
     collection_name: str = Field(
@@ -196,72 +211,72 @@ class Prompt(BaseModel):
         deprecated=True,
     )
     collection_names: list[str] = Field(
-        default=[settings.vector_store.default_collection_name],
+        default=[CONFIG.vector_store.default_collection_name],
         description="Name of the collections in the vector database.",
     )
     enable_query_rewriting: bool = Field(
         description="Enable or disable query rewriting.",
-        default=settings.query_rewriter.enable_query_rewriter,
+        default=CONFIG.query_rewriter.enable_query_rewriter,
     )
     enable_reranker: bool = Field(
         description="Enable or disable reranking by the ranker model.",
-        default=settings.ranking.enable_reranker,
+        default=CONFIG.ranking.enable_reranker,
     )
     enable_guardrails: bool = Field(
         description="Enable or disable guardrailing of queries/responses.",
-        default=settings.enable_guardrails,
+        default=CONFIG.enable_guardrails,
     )
     enable_citations: bool = Field(
         description="Enable or disable citations as part of response.",
-        default=settings.enable_citations,
+        default=CONFIG.enable_citations,
     )
     enable_vlm_inference: bool = Field(
         description="Enable or disable VLM inference.",
-        default=settings.enable_vlm_inference,
+        default=CONFIG.enable_vlm_inference,
     )
     enable_filter_generator: bool = Field(
         description="Enable or disable automatic filter expression generation from natural language.",
-        default=settings.filter_expression_generator.enable_filter_generator,
+        default=CONFIG.filter_expression_generator.enable_filter_generator,
     )
     model: str = Field(
         description="Name of NIM LLM model to be used for inference.",
-        default=settings.llm.model_name.strip('"'),
+        default=CONFIG.llm.model_name.strip('"'),
         max_length=4096,
         pattern=r"[\s\S]*",
     )
     llm_endpoint: str = Field(
         description="Endpoint URL for the llm model server.",
-        default=settings.llm.server_url.strip('"'),
+        default=CONFIG.llm.server_url.strip('"'),
         max_length=2048,  # URLs can be long, but 4096 is excessive
     )
     embedding_model: str = Field(
         description="Name of the embedding model used for vectorization.",
-        default=settings.embeddings.model_name.strip('"'),
+        default=CONFIG.embeddings.model_name.strip('"'),
         max_length=256,  # Reduced from 4096 as model names are typically short
     )
     embedding_endpoint: str | None = Field(
         description="Endpoint URL for the embedding model server.",
-        default=settings.embeddings.server_url.strip('"'),
+        default=CONFIG.embeddings.server_url.strip('"'),
         max_length=2048,  # URLs can be long, but 4096 is excessive
     )
     reranker_model: str = Field(
         description="Name of the reranker model used for ranking results.",
-        default=settings.ranking.model_name.strip('"'),
+        default=CONFIG.ranking.model_name.strip('"'),
         max_length=256,
     )
     reranker_endpoint: str | None = Field(
         description="Endpoint URL for the reranker model server.",
-        default=settings.ranking.server_url.strip('"'),
+        default=CONFIG.ranking.server_url.strip('"'),
         max_length=2048,
     )
     vlm_model: str = Field(
         description="Name of the VLM model used for inference.",
-        default=settings.vlm.model_name.strip('"'),
+        default=CONFIG.vlm.model_name.strip('"'),
         max_length=256,
     )
     vlm_endpoint: str | None = Field(
         description="Endpoint URL for the VLM model server.",
-        default=settings.vlm.server_url.strip('"'),
+        default=CONFIG.vlm.server_url.strip('"'),
         max_length=2048,
     )
 
@@ -284,7 +299,7 @@ class Prompt(BaseModel):
         "Can be a string or a list of dictionaries with filter conditions.",
     )
     confidence_threshold: float = Field(
-        default=settings.default_confidence_threshold,
+        default=CONFIG.default_confidence_threshold,
         description="Minimum confidence score threshold for filtering chunks. "
         "Only chunks with relevance scores >= this threshold will be included. "
         "Range: 0.0 to 1.0. Default: 0.0 (no filtering). "
@@ -319,29 +334,28 @@ class Prompt(BaseModel):
 class DocumentSearch(BaseModel):
     """Definition of the DocumentSearch API data type."""
 
-    query: str = Field(
-        description="The content or keywords to search for within documents.",
-        max_length=131072,
-        pattern=r"[\s\S]*",
+    query: str | list[TextContent | ImageContent] = Field(
+        description="The content or keywords to search for within documents. "
+        "Can be a string for text-only queries, or an array of content objects for multimodal queries containing text and/or images.",
         default="Tell me something interesting",
     )
     reranker_top_k: int = Field(
         description="Number of document chunks to retrieve.",
-        default=int(settings.retriever.top_k),
+        default=int(CONFIG.retriever.top_k),
         ge=0,
         le=25,
         format="int64",
     )
     vdb_top_k: int = Field(
         description="Number of top results to retrieve from the vector database.",
-        default=settings.retriever.vdb_top_k,
+        default=CONFIG.retriever.vdb_top_k,
         ge=0,
         le=400,
         format="int64",
     )
     vdb_endpoint: str = Field(
         description="Endpoint url of the vector database server.",
-        default=settings.vector_store.url,
+        default=CONFIG.vector_store.url,
     )
     # Reserved for future use
     # vdb_search_type: str = Field(
@@ -357,7 +371,7 @@ class DocumentSearch(BaseModel):
         deprecated=True,
     )
     collection_names: list[str] = Field(
-        default=[settings.vector_store.default_collection_name],
+        default=[CONFIG.vector_store.default_collection_name],
         description="Name of the collections in the vector database.",
     )
     messages: list[Message] = Field(
@@ -370,34 +384,34 @@ class DocumentSearch(BaseModel):
     )
     enable_query_rewriting: bool = Field(
         description="Enable or disable query rewriting.",
-        default=settings.query_rewriter.enable_query_rewriter,
+        default=CONFIG.query_rewriter.enable_query_rewriter,
     )
     enable_reranker: bool = Field(
         description="Enable or disable reranking by the ranker model.",
-        default=settings.ranking.enable_reranker,
+        default=CONFIG.ranking.enable_reranker,
     )
     enable_filter_generator: bool = Field(
         description="Enable or disable automatic filter expression generation from natural language.",
-        default=settings.filter_expression_generator.enable_filter_generator,
+        default=CONFIG.filter_expression_generator.enable_filter_generator,
     )
     embedding_model: str = Field(
         description="Name of the embedding model used for vectorization.",
-        default=settings.embeddings.model_name.strip('"'),
+        default=CONFIG.embeddings.model_name.strip('"'),
         max_length=256,  # Reduced from 4096 as model names are typically short
     )
     embedding_endpoint: str = Field(
         description="Endpoint URL for the embedding model server.",
-        default=settings.embeddings.server_url.strip('"'),
+        default=CONFIG.embeddings.server_url.strip('"'),
         max_length=2048,  # URLs can be long, but 4096 is excessive
     )
     reranker_model: str = Field(
         description="Name of the reranker model used for ranking results.",
-        default=settings.ranking.model_name.strip('"'),
+        default=CONFIG.ranking.model_name.strip('"'),
         max_length=256,
     )
     reranker_endpoint: str | None = Field(
         description="Endpoint URL for the reranker model server.",
-        default=settings.ranking.server_url.strip('"'),
+        default=CONFIG.ranking.server_url.strip('"'),
         max_length=2048,
     )
 
@@ -408,7 +422,7 @@ class DocumentSearch(BaseModel):
         # pattern=r"[\s\S]*",
     )
     confidence_threshold: float = Field(
-        default=settings.default_confidence_threshold,
+        default=CONFIG.default_confidence_threshold,
         description="Minimum confidence score threshold for filtering chunks. "
         "Only chunks with relevance scores >= this threshold will be included. "
         "Range: 0.0 to 1.0. Default: 0.0 (no filtering). "
@@ -421,6 +435,24 @@ class DocumentSearch(BaseModel):
     def validate_confidence_threshold(cls, values):
         """Custom validator for confidence_threshold to provide better error messages."""
         validate_confidence_threshold_field(values.confidence_threshold)
+        return values
+
+    @model_validator(mode="after")
+    def sanitize_query_content(cls, values):
+        """Sanitize query content similar to Message content validation."""
+        import bleach
+
+        query = values.query
+        if isinstance(query, str):
+            values.query = bleach.clean(query, strip=True)
+        elif isinstance(query, list):
+            # For list content, sanitize text content but leave image URLs as-is
+            sanitized_content = []
+            for item in query:
+                if isinstance(item, TextContent):
+                    item.text = bleach.clean(item.text, strip=True)
+                sanitized_content.append(item)
+            values.query = sanitized_content
         return values
 
     # Validator to check chat message structure
@@ -648,6 +680,8 @@ async def generate_answer(request: Request, prompt: Prompt) -> StreamingResponse
         "temperature": prompt.temperature,
         "top_p": prompt.top_p,
         "max_tokens": prompt.max_tokens,
+        "min_tokens": prompt.min_tokens,
+        "ignore_eos": prompt.ignore_eos,
         "stop": prompt.stop,
         "reranker_top_k": prompt.reranker_top_k,
         "vdb_top_k": prompt.vdb_top_k,
@@ -718,6 +752,8 @@ async def generate_answer(request: Request, prompt: Prompt) -> StreamingResponse
             use_knowledge_base=prompt.use_knowledge_base,
             temperature=prompt.temperature,
             top_p=prompt.top_p,
+            min_tokens=prompt.min_tokens,
+            ignore_eos=prompt.ignore_eos,
             max_tokens=prompt.max_tokens,
             stop=prompt.stop,
             reranker_top_k=prompt.reranker_top_k,
@@ -849,14 +885,77 @@ async def document_search(
 ) -> dict[str, list[dict[str, Any]]]:
     """Search for the most relevant documents for the given search parameters."""
 
+    # Helper function to sanitize query content for logging
+    def sanitize_query_for_logging(query):
+        """Remove image data from query for cleaner logging."""
+        if isinstance(query, str):
+            return query
+        elif isinstance(query, list):
+            sanitized_query = []
+            for item in query:
+                if hasattr(item, "type") and item.type == "image_url":
+                    # Replace image data with placeholder for logging
+                    sanitized_query.append(
+                        {
+                            "type": "image_url",
+                            "image_url": "[IMAGE_DATA_REMOVED_FOR_LOGGING]",
+                        }
+                    )
+                else:
+                    # Keep text content as is
+                    sanitized_query.append(
+                        item.dict() if hasattr(item, "dict") else item
+                    )
+            return sanitized_query
+        return query
+
+    request_data = {
+        "query": sanitize_query_for_logging(data.query),
+        "reranker_top_k": data.reranker_top_k,
+        "vdb_top_k": data.vdb_top_k,
+        "collection_names": data.collection_names,
+        "enable_reranker": data.enable_reranker,
+        "enable_query_rewriting": data.enable_query_rewriting,
+        "enable_filter_generator": data.enable_filter_generator,
+        "confidence_threshold": data.confidence_threshold,
+    }
+    logger.info(
+        f"📥 Incoming request to /search endpoint:\n{json.dumps(request_data, indent=2)}"
+    )
+
     if metrics:
         metrics.update_api_requests(method=request.method, endpoint=request.url.path)
     try:
         messages_dict = [
             {"role": msg.role, "content": msg.content} for msg in data.messages
         ]
+
+        # Process query to handle multimodal content similar to generate endpoint
+        query_processed = data.query
+        if isinstance(data.query, list):
+            # Convert multimodal query to the format expected by the main search method
+            content_list = []
+            for content_item in data.query:
+                if hasattr(content_item, "type"):
+                    if content_item.type == "text":
+                        content_list.append({"type": "text", "text": content_item.text})
+                    elif content_item.type == "image_url":
+                        content_list.append(
+                            {
+                                "type": "image_url",
+                                "image_url": {
+                                    "url": content_item.image_url.url,
+                                    "detail": content_item.image_url.detail,
+                                },
+                            }
+                        )
+                else:
+                    # Fallback for dict-like content
+                    content_list.append(content_item)
+            query_processed = content_list
+
         return NVIDIA_RAG.search(
-            query=data.query,
+            query=query_processed,
             messages=messages_dict,
             reranker_top_k=data.reranker_top_k,
             vdb_top_k=data.vdb_top_k,

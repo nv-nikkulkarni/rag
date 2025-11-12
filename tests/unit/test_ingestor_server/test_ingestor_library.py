@@ -22,6 +22,7 @@ import os
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
+
 from nvidia_rag.ingestor_server.main import NvidiaRAGIngestor
 
 
@@ -95,7 +96,7 @@ class TestNvidiaRAGIngestor:
         """Create NvidiaRAGIngestor instance with mocked dependencies."""
         with (
             patch(
-                "nvidia_rag.ingestor_server.main.get_config",
+                "nvidia_rag.utils.common.get_config",
                 return_value=mock_config,
             ),
             patch(
@@ -146,7 +147,7 @@ class TestNvidiaRAGIngestor:
 
         # Test library mode
         with (
-            patch("nvidia_rag.ingestor_server.main.get_config"),
+            patch("nvidia_rag.utils.common.get_config"),
             patch("nvidia_rag.ingestor_server.main.get_nv_ingest_client"),
         ):
             ingestor_lib = NvidiaRAGIngestor(vdb_op=mock_vdb, mode="library")
@@ -385,7 +386,7 @@ class TestNvidiaRAGIngestor:
         ]
 
         # Mock metadata schema
-        ingestor.vdb_op.get_metadata_schema.return_value = [
+        metadata_schema_data = [
             {"name": "category", "type": "string", "required": False},
             {"name": "author", "type": "string", "required": False},
         ]
@@ -402,7 +403,7 @@ class TestNvidiaRAGIngestor:
             mock_validator_class.return_value = mock_validator
 
             validation_status, errors = await ingestor._validate_custom_metadata(
-                custom_metadata, "test_collection", ingestor.vdb_op, filepaths
+                custom_metadata, "test_collection", metadata_schema_data, filepaths
             )
 
             assert validation_status is True
@@ -442,10 +443,10 @@ class TestNvidiaRAGIngestor:
             }
         ]
 
-        ingestor.vdb_op.get_metadata_schema.return_value = []
+        metadata_schema_data = []
 
         validation_status, errors = await ingestor._validate_custom_metadata(
-            custom_metadata, "test_collection", ingestor.vdb_op, filepaths
+            custom_metadata, "test_collection", metadata_schema_data, filepaths
         )
 
         assert validation_status is False
@@ -547,7 +548,10 @@ class TestNvidiaRAGIngestor:
         with patch(
             "nvidia_rag.ingestor_server.main.INGESTION_TASK_HANDLER"
         ) as mock_handler:
-            mock_handler.get_task_status.return_value = "PENDING"
+            mock_handler.get_task_status_and_result.return_value = {
+                "state": "PENDING",
+                "result": {"message": "Task is pending"}
+            }
 
             result = await NvidiaRAGIngestor.status("test-task-id")
 
@@ -560,8 +564,10 @@ class TestNvidiaRAGIngestor:
         with patch(
             "nvidia_rag.ingestor_server.main.INGESTION_TASK_HANDLER"
         ) as mock_handler:
-            mock_handler.get_task_status.return_value = "FINISHED"
-            mock_handler.get_task_result.return_value = {"message": "success"}
+            mock_handler.get_task_status_and_result.return_value = {
+                "state": "FINISHED",
+                "result": {"message": "success"}
+            }
 
             result = await NvidiaRAGIngestor.status("test-task-id")
 
@@ -574,10 +580,12 @@ class TestNvidiaRAGIngestor:
         with patch(
             "nvidia_rag.ingestor_server.main.INGESTION_TASK_HANDLER"
         ) as mock_handler:
-            mock_handler.get_task_status.return_value = "FINISHED"
-            mock_handler.get_task_result.return_value = {
-                "state": "FAILED",
-                "message": "error",
+            mock_handler.get_task_status_and_result.return_value = {
+                "state": "FINISHED",
+                "result": {
+                    "state": "FAILED",
+                    "message": "error",
+                }
             }
 
             result = await NvidiaRAGIngestor.status("test-task-id")

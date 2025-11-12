@@ -24,32 +24,56 @@ from langchain_community.embeddings import HuggingFaceEmbeddings
 from langchain_core.embeddings import Embeddings
 from langchain_nvidia_ai_endpoints import NVIDIAEmbeddings
 
-from nvidia_rag.utils.common import get_config, sanitize_nim_url
+from nvidia_rag.utils.common import ConfigProxy, sanitize_nim_url
 
 logger = logging.getLogger(__name__)
+CONFIG = ConfigProxy()
 
 
 @lru_cache
-def get_embedding_model(model: str, url: str) -> Embeddings:
+def get_embedding_model(
+    model: str, url: str, truncate: str | None = "END"
+) -> Embeddings:
     """Create the embedding model."""
-    settings = get_config()
 
     # Sanitize the URL
     url = sanitize_nim_url(url, model, "embedding")
 
     logger.info(
         "Using %s as model engine and %s and model for embeddings",
-        settings.embeddings.model_engine,
+        CONFIG.embeddings.model_engine,
         model,
     )
 
-    if settings.embeddings.model_engine == "nvidia-ai-endpoints":
+    if CONFIG.embeddings.model_engine == "nvidia-ai-endpoints":
         if url:
             logger.info("Using embedding model %s hosted at %s", model, url)
-            return NVIDIAEmbeddings(base_url=url, model=model, truncate="END")
+            if truncate is not None:
+                return NVIDIAEmbeddings(
+                    base_url=url,
+                    model=model,
+                    truncate=truncate,
+                    dimensions=CONFIG.embeddings.dimensions,
+                )
+            else:
+                return NVIDIAEmbeddings(
+                    base_url=url,
+                    model=model,
+                    dimensions=CONFIG.embeddings.dimensions,
+                )
 
         logger.info("Using embedding model %s hosted at api catalog", model)
-        return NVIDIAEmbeddings(model=model, truncate="END")
+        if truncate is not None:
+            return NVIDIAEmbeddings(
+                model=model,
+                truncate=truncate,
+                dimensions=CONFIG.embeddings.dimensions,
+            )
+        else:
+            return NVIDIAEmbeddings(
+                model=model,
+                dimensions=CONFIG.embeddings.dimensions,
+            )
 
     raise RuntimeError(
         "Unable to find any supported embedding model. Supported engine is huggingface and nvidia-ai-endpoints."

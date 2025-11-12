@@ -15,34 +15,34 @@
 
 import json
 import time
-from unittest.mock import Mock, patch, AsyncMock, MagicMock
 from typing import Any
+from unittest.mock import AsyncMock, MagicMock, Mock, patch
 
 import pytest
 from pydantic import ValidationError
 from pymilvus.exceptions import MilvusException, MilvusUnavailableException
 
 from nvidia_rag.rag_server.response_generator import (
-    Usage,
+    FALLBACK_EXCEPTION_MSG,
+    ChainResponse,
+    ChainResponseChoices,
+    Citations,
+    ImageContent,
+    ImageUrl,
+    Message,
+    Metrics,
     SourceMetadata,
     SourceResult,
-    Citations,
     TextContent,
-    ImageUrl,
-    ImageContent,
-    Message,
-    ChainResponseChoices,
-    Metrics,
-    ChainResponse,
-    prepare_llm_request,
-    prepare_citations,
-    error_response_generator,
+    Usage,
     _is_empty_content,
-    escape_json_content_multimodal,
+    error_response_generator,
     escape_json_content,
+    escape_json_content_multimodal,
     generate_answer,
+    prepare_citations,
+    prepare_llm_request,
     retrieve_summary,
-    FALLBACK_EXCEPTION_MSG,
 )
 
 
@@ -58,11 +58,7 @@ class TestUsage:
 
     def test_usage_custom_values(self):
         """Test Usage with custom values"""
-        usage = Usage(
-            total_tokens=100,
-            prompt_tokens=50,
-            completion_tokens=50
-        )
+        usage = Usage(total_tokens=100, prompt_tokens=50, completion_tokens=50)
         assert usage.total_tokens == 100
         assert usage.prompt_tokens == 50
         assert usage.completion_tokens == 50
@@ -104,7 +100,7 @@ class TestSourceMetadata:
             width=600,
             description="Test document",
             location=[0.1, 0.2, 0.3, 0.4],
-            content_metadata={"type": "text"}
+            content_metadata={"type": "text"},
         )
         assert metadata.language == "en"
         assert metadata.page_number == 1
@@ -189,11 +185,10 @@ class TestMessage:
     def test_message_multimodal_content(self):
         """Test Message with multimodal content"""
         text_content = TextContent(text="What is this?")
-        image_content = ImageContent(image_url=ImageUrl(url="data:image/png;base64,test"))
-        message = Message(
-            role="user",
-            content=[text_content, image_content]
+        image_content = ImageContent(
+            image_url=ImageUrl(url="data:image/png;base64,test")
         )
+        message = Message(role="user", content=[text_content, image_content])
         assert message.role == "user"
         assert len(message.content) == 2
         assert isinstance(message.content[0], TextContent)
@@ -223,7 +218,9 @@ class TestMessage:
     def test_message_content_sanitization_multimodal(self):
         """Test Message content sanitization for multimodal content"""
         text_content = TextContent(text="<script>alert('xss')</script>Hello")
-        image_content = ImageContent(image_url=ImageUrl(url="data:image/png;base64,test"))
+        image_content = ImageContent(
+            image_url=ImageUrl(url="data:image/png;base64,test")
+        )
         message = Message(content=[text_content, image_content])
         assert message.content[0].text == "alert('xss')Hello"
         assert message.content[1].image_url.url == "data:image/png;base64,test"
@@ -245,10 +242,7 @@ class TestChainResponseChoices:
         message = Message(role="assistant", content="Hello")
         delta = Message(role=None, content="Hello")
         choices = ChainResponseChoices(
-            index=1,
-            message=message,
-            delta=delta,
-            finish_reason="stop"
+            index=1, message=message, delta=delta, finish_reason="stop"
         )
         assert choices.index == 1
         assert choices.message.content == "Hello"
@@ -275,7 +269,7 @@ class TestMetrics:
             llm_ttft_ms=50.0,
             context_reranker_time_ms=25.0,
             retrieval_time_ms=75.0,
-            llm_generation_time_ms=200.0
+            llm_generation_time_ms=200.0,
         )
         assert metrics.rag_ttft_ms == 100.0
         assert metrics.llm_ttft_ms == 50.0
@@ -318,7 +312,7 @@ class TestChainResponse:
             created=1234567890,
             usage=usage,
             metrics=metrics,
-            citations=citations
+            citations=citations,
         )
         assert response.id == "test-id"
         assert len(response.choices) == 1
@@ -345,10 +339,7 @@ class TestPrepareLLMRequest:
         """Test prepare_llm_request with additional kwargs"""
         messages = [{"role": "user", "content": "Hello"}]
         last_user_message, processed_chat_history = prepare_llm_request(
-            messages,
-            temperature=0.7,
-            max_tokens=100,
-            stream=True
+            messages, temperature=0.7, max_tokens=100, stream=True
         )
 
         assert last_user_message == "Hello"
@@ -388,19 +379,19 @@ class TestPrepareCitations:
         mock_doc1.metadata = {
             "source": "test1.pdf",  # Use string source to trigger first if block
             "content_metadata": {"page_number": 1, "type": "image", "location": []},
-            "relevance_score": 0.8
+            "relevance_score": 0.8,
         }
         mock_doc2 = Mock()
         mock_doc2.page_content = "Test content 2"
         mock_doc2.metadata = {
             "source": "test2.pdf",  # Use string source to trigger first if block
             "content_metadata": {"page_number": 2, "type": "image", "location": []},
-            "relevance_score": 0.9
+            "relevance_score": 0.9,
         }
         contexts = [mock_doc1, mock_doc2]
 
         with patch('nvidia_rag.rag_server.response_generator.MINIO_OPERATOR') as mock_minio, \
-             patch('nvidia_rag.rag_server.response_generator.get_unique_thumbnail_id') as mock_get_thumbnail:
+             patch('nvidia_rag.rag_server.response_generator.get_unique_thumbnail_id_from_result') as mock_get_thumbnail:
             # Mock the MinIO operator methods to handle collection_name parameter
             mock_minio.get_payload.return_value = {"content": "base64_thumbnail"}
             mock_get_thumbnail.return_value = "test_thumbnail_id"
@@ -423,12 +414,12 @@ class TestPrepareCitations:
             "source": {"source_id": "test.pdf"},
             "content_metadata": {"page_number": 1, "type": "image", "location": []},
             "collection_name": "test_collection",
-            "relevance_score": 0.8
+            "relevance_score": 0.8,
         }
         contexts = [mock_doc]
 
         with patch('nvidia_rag.rag_server.response_generator.MINIO_OPERATOR') as mock_minio, \
-             patch('nvidia_rag.rag_server.response_generator.get_unique_thumbnail_id') as mock_get_thumbnail:
+             patch('nvidia_rag.rag_server.response_generator.get_unique_thumbnail_id_from_result') as mock_get_thumbnail:
             mock_minio.get_payload.return_value = {"content": "base64_thumbnail"}
             mock_get_thumbnail.return_value = "test_thumbnail_id"
 
@@ -448,12 +439,25 @@ class TestErrorResponseGenerator:
         error_msg = "Test error message"
         result = list(error_response_generator(error_msg))
 
-        # Error message is chunked into 5-character pieces
-        expected_chunks = len(error_msg) // 5 + (1 if len(error_msg) % 5 > 0 else 0) + 1  # +1 for final chunk
-        assert len(result) == expected_chunks
+        # Verify we get multiple chunks (at least 2: content + final)
+        assert len(result) >= 2
+
+        # Verify first chunk structure and content starts correctly
         response_data = json.loads(result[0].replace("data: ", ""))
-        assert response_data["choices"][0]["message"]["content"] == "Test "  # First 5 chars
+        first_content = response_data["choices"][0]["message"]["content"]
+        assert error_msg.startswith(first_content)
         assert response_data["choices"][0]["finish_reason"] is None
+
+        # Verify last chunk has finish_reason
+        last_response_data = json.loads(result[-1].replace("data: ", ""))
+        assert last_response_data["choices"][0]["finish_reason"] == "stop"
+
+        # Verify complete message can be reconstructed
+        combined_content = "".join(
+            json.loads(chunk.replace("data: ", ""))["choices"][0]["message"]["content"]
+            for chunk in result
+        )
+        assert combined_content == error_msg
 
     def test_error_response_generator_fallback(self):
         """Test error_response_generator with fallback message"""
@@ -533,7 +537,7 @@ class TestEscapeJsonContentMultimodal:
         """Test escape_json_content_multimodal with list"""
         content = [
             {"type": "text", "text": "Hello\nWorld"},
-            {"type": "image_url", "image_url": {"url": "data:image/png;base64,test"}}
+            {"type": "image_url", "image_url": {"url": "data:image/png;base64,test"}},
         ]
         result = escape_json_content_multimodal(content)
         assert result[0]["text"] == "Hello\nWorld"
@@ -581,6 +585,7 @@ class TestGenerateAnswer:
     @pytest.mark.asyncio
     async def test_generate_answer_success(self):
         """Test generate_answer with successful generation"""
+
         def mock_generator():
             yield "Hello"
             yield " world"
@@ -596,7 +601,7 @@ class TestGenerateAnswer:
             generator=mock_generator(),
             contexts=contexts,
             model="test-model",
-            enable_citations=True
+            enable_citations=True,
         ):
             result.append(chunk)
 
@@ -609,6 +614,7 @@ class TestGenerateAnswer:
     @pytest.mark.asyncio
     async def test_generate_answer_milvus_exception(self):
         """Test generate_answer with MilvusException"""
+
         def mock_generator():
             yield "Hello"  # First yield works
             raise MilvusException("Milvus error")  # Exception on second iteration
@@ -620,21 +626,28 @@ class TestGenerateAnswer:
 
         result = []
         for chunk in generate_answer(
-            generator=mock_generator(),
-            contexts=contexts,
-            model="test-model"
+            generator=mock_generator(), contexts=contexts, model="test-model"
         ):
             result.append(chunk)
 
-        # Should return error response
+        # Should return error response chunks
         assert len(result) > 0
-        # Check that we get error response generator
-        error_generators = [chunk for chunk in result if hasattr(chunk, '__iter__') and not isinstance(chunk, str)]
-        assert len(error_generators) > 0
+        # Check that we get error response containing the error message
+        # All chunks should be strings starting with "data: "
+        assert all(
+            isinstance(chunk, str) and chunk.startswith("data: ") for chunk in result
+        )
+        # Verify the specific Milvus error message is surfaced by extracting content from all chunks
+        combined_content = "".join(
+            json.loads(chunk.replace("data: ", ""))["choices"][0]["message"]["content"]
+            for chunk in result
+        )
+        assert "milvus server" in combined_content.lower()
 
     @pytest.mark.asyncio
     async def test_generate_answer_general_exception(self):
         """Test generate_answer with general exception"""
+
         def mock_generator():
             yield "Hello"  # First yield works
             raise Exception("General error")  # Exception on second iteration
@@ -646,17 +659,19 @@ class TestGenerateAnswer:
 
         result = []
         for chunk in generate_answer(
-            generator=mock_generator(),
-            contexts=contexts,
-            model="test-model"
+            generator=mock_generator(), contexts=contexts, model="test-model"
         ):
             result.append(chunk)
 
-        # Should return error response
+        # Should return error response chunks
         assert len(result) > 0
-        # Check that we get error response generator
-        error_generators = [chunk for chunk in result if hasattr(chunk, '__iter__') and not isinstance(chunk, str)]
-        assert len(error_generators) > 0
+        # Check that we get error response containing the error message
+        # All chunks should be strings starting with "data: "
+        assert all(
+            isinstance(chunk, str) and chunk.startswith("data: ") for chunk in result
+        )
+        # Should have multiple chunks (at least the initial Hello + error chunks)
+        assert len(result) >= 2
 
 
 class TestRetrieveSummary:
@@ -665,14 +680,22 @@ class TestRetrieveSummary:
     @pytest.mark.asyncio
     async def test_retrieve_summary_success(self):
         """Test retrieve_summary with successful retrieval"""
-        with patch('nvidia_rag.rag_server.response_generator.MINIO_OPERATOR') as mock_minio, \
-             patch('nvidia_rag.rag_server.response_generator.get_unique_thumbnail_id') as mock_get_thumbnail:
-            mock_minio.get_payload.return_value = {"summary": "Test summary", "file_name": "test.pdf"}
+        with (
+            patch(
+                "nvidia_rag.rag_server.response_generator.MINIO_OPERATOR"
+            ) as mock_minio,
+            patch(
+                "nvidia_rag.rag_server.response_generator.get_unique_thumbnail_id"
+            ) as mock_get_thumbnail,
+        ):
+            mock_minio.get_payload.return_value = {
+                "summary": "Test summary",
+                "file_name": "test.pdf",
+            }
             mock_get_thumbnail.return_value = "test_thumbnail_id"
 
             result = await retrieve_summary(
-                collection_name="test_collection",
-                file_name="test.pdf"
+                collection_name="test_collection", file_name="test.pdf"
             )
 
             assert result["status"] == "SUCCESS"
@@ -681,14 +704,19 @@ class TestRetrieveSummary:
     @pytest.mark.asyncio
     async def test_retrieve_summary_exception(self):
         """Test retrieve_summary with exception"""
-        with patch('nvidia_rag.rag_server.response_generator.MINIO_OPERATOR') as mock_minio, \
-             patch('nvidia_rag.rag_server.response_generator.get_unique_thumbnail_id') as mock_get_thumbnail:
+        with (
+            patch(
+                "nvidia_rag.rag_server.response_generator.MINIO_OPERATOR"
+            ) as mock_minio,
+            patch(
+                "nvidia_rag.rag_server.response_generator.get_unique_thumbnail_id"
+            ) as mock_get_thumbnail,
+        ):
             mock_minio.get_payload.side_effect = Exception("Summary error")
             mock_get_thumbnail.return_value = "test_thumbnail_id"
 
             result = await retrieve_summary(
-                collection_name="test_collection",
-                file_name="test.pdf"
+                collection_name="test_collection", file_name="test.pdf"
             )
 
             assert result["status"] == "ERROR"

@@ -17,23 +17,24 @@ import asyncio
 import logging
 import os
 from unittest.mock import AsyncMock, MagicMock, patch
-import aiohttp
 
+import aiohttp
 import pytest
 
 from nvidia_rag.rag_server.health import (
-    check_service_health,
-    check_minio_health,
-    is_nvidia_api_catalog_url,
     check_all_services_health,
-    print_health_report,
     check_and_print_services_health,
+    check_minio_health,
+    check_service_health,
     check_services_health,
+    is_nvidia_api_catalog_url,
+    print_health_report,
 )
 
 
 class MockAsyncContextManager:
     """Helper class to properly mock async context managers for aiohttp"""
+
     def __init__(self, response):
         self.response = response
 
@@ -60,7 +61,9 @@ class TestCheckServiceHealth:
             mock_session_class.return_value.__aenter__.return_value = mock_session
 
             with patch("time.time", side_effect=[0.0, 0.1]):
-                result = await check_service_health("http://localhost:8080/health", "Test Service")
+                result = await check_service_health(
+                    "http://localhost:8080/health", "Test Service"
+                )
 
             assert result["status"] == "healthy"
             assert result["service"] == "Test Service"
@@ -80,7 +83,9 @@ class TestCheckServiceHealth:
             mock_session_class.return_value.__aenter__.return_value = mock_session
 
             with patch("time.time", side_effect=[0.0, 0.05]):
-                result = await check_service_health("http://localhost:8080/health", "Test Service")
+                result = await check_service_health(
+                    "http://localhost:8080/health", "Test Service"
+                )
 
             assert result["status"] == "unhealthy"
             assert result["http_status"] == 500
@@ -90,10 +95,12 @@ class TestCheckServiceHealth:
         """Test service health check with timeout"""
         with patch("aiohttp.ClientSession") as mock_session_class:
             mock_session = MagicMock()
-            mock_session.get.side_effect = asyncio.TimeoutError()
+            mock_session.get.side_effect = TimeoutError()
             mock_session_class.return_value.__aenter__.return_value = mock_session
 
-            result = await check_service_health("http://localhost:8080/health", "Test Service", timeout=1)
+            result = await check_service_health(
+                "http://localhost:8080/health", "Test Service", timeout=1
+            )
 
             assert result["status"] == "timeout"
             assert "timed out after 1s" in result["error"]
@@ -106,7 +113,9 @@ class TestCheckServiceHealth:
             mock_session.get.side_effect = aiohttp.ClientError("Connection failed")
             mock_session_class.return_value.__aenter__.return_value = mock_session
 
-            result = await check_service_health("http://localhost:8080/health", "Test Service")
+            result = await check_service_health(
+                "http://localhost:8080/health", "Test Service"
+            )
 
             assert result["status"] == "error"
             assert "Connection failed" in result["error"]
@@ -125,10 +134,10 @@ class TestCheckServiceHealth:
 
             json_data = {"test": "data"}
             result = await check_service_health(
-                "http://localhost:8080/api", 
-                "API Service", 
-                method="POST", 
-                json_data=json_data
+                "http://localhost:8080/api",
+                "API Service",
+                method="POST",
+                json_data=json_data,
             )
 
             assert result["status"] == "healthy"
@@ -176,9 +185,7 @@ class TestCheckServiceHealth:
 
             headers = {"Authorization": "Bearer token"}
             result = await check_service_health(
-                "http://localhost:8080/health", 
-                "Test Service", 
-                headers=headers
+                "http://localhost:8080/health", "Test Service", headers=headers
             )
 
             assert result["status"] == "healthy"
@@ -198,7 +205,9 @@ class TestCheckMinioHealth:
             mock_minio_class.return_value = mock_minio
 
             with patch("time.time", side_effect=[0.0, 0.15]):
-                result = await check_minio_health("localhost:9000", "access_key", "secret_key")
+                result = await check_minio_health(
+                    "localhost:9000", "access_key", "secret_key"
+                )
 
             assert result["status"] == "healthy"
             assert result["service"] == "MinIO"
@@ -212,7 +221,9 @@ class TestCheckMinioHealth:
         with patch("nvidia_rag.rag_server.health.MinioOperator") as mock_minio_class:
             mock_minio_class.side_effect = Exception("Connection refused")
 
-            result = await check_minio_health("localhost:9000", "access_key", "secret_key")
+            result = await check_minio_health(
+                "localhost:9000", "access_key", "secret_key"
+            )
 
             assert result["status"] == "error"
             assert "Connection refused" in result["error"]
@@ -225,7 +236,9 @@ class TestCheckMinioHealth:
             mock_minio.client.list_buckets.side_effect = Exception("Access denied")
             mock_minio_class.return_value = mock_minio
 
-            result = await check_minio_health("localhost:9000", "wrong_key", "wrong_secret")
+            result = await check_minio_health(
+                "localhost:9000", "wrong_key", "wrong_secret"
+            )
 
             assert result["status"] == "error"
             assert "Access denied" in result["error"]
@@ -252,15 +265,24 @@ class TestIsNvidiaApiCatalogUrl:
 
     def test_is_nvidia_api_catalog_url_nvidia_integrate_prefix(self):
         """Test with NVIDIA integrate API catalog URL"""
-        assert is_nvidia_api_catalog_url("https://integrate.api.nvidia.com/v1/models") is True
+        assert (
+            is_nvidia_api_catalog_url("https://integrate.api.nvidia.com/v1/models")
+            is True
+        )
 
     def test_is_nvidia_api_catalog_url_nvidia_ai_prefix(self):
         """Test with NVIDIA AI API catalog URL"""
-        assert is_nvidia_api_catalog_url("https://ai.api.nvidia.com/v1/chat/completions") is True
+        assert (
+            is_nvidia_api_catalog_url("https://ai.api.nvidia.com/v1/chat/completions")
+            is True
+        )
 
     def test_is_nvidia_api_catalog_url_nvidia_nvcf_prefix(self):
         """Test with NVIDIA NVCF API catalog URL"""
-        assert is_nvidia_api_catalog_url("https://api.nvcf.nvidia.com/v2/functions") is True
+        assert (
+            is_nvidia_api_catalog_url("https://api.nvcf.nvidia.com/v2/functions")
+            is True
+        )
 
     def test_is_nvidia_api_catalog_url_local_url(self):
         """Test with local URL"""
@@ -272,7 +294,12 @@ class TestIsNvidiaApiCatalogUrl:
 
     def test_is_nvidia_api_catalog_url_partial_match(self):
         """Test with URL that contains but doesn't start with NVIDIA prefix"""
-        assert is_nvidia_api_catalog_url("https://example.com/https://integrate.api.nvidia.com") is False
+        assert (
+            is_nvidia_api_catalog_url(
+                "https://example.com/https://integrate.api.nvidia.com"
+            )
+            is False
+        )
 
 
 class TestCheckAllServicesHealth:
@@ -282,71 +309,85 @@ class TestCheckAllServicesHealth:
     def mock_config(self):
         """Mock configuration for testing"""
         config = MagicMock()
-        
+
         # MinIO config
         config.minio.endpoint = "localhost:9000"
         config.minio.access_key = "test_access_key"
         config.minio.secret_key = "test_secret_key"
-        
+
         # Vector store config
         config.vector_store.name = "milvus"
         config.vector_store.url = "http://localhost:19530"
-        
+
         # LLM config
         config.llm.server_url = "http://localhost:8001"
         config.llm.model_name = "llama-2-7b-chat"
-        
+
         # Query rewriter config
         config.query_rewriter.enable_query_rewriter = True
         config.query_rewriter.server_url = "http://localhost:8002"
         config.query_rewriter.model_name = "nv-rewrite-qr-mistral-7b"
-        
+
         # Embeddings config
         config.embeddings.server_url = "http://localhost:8003"
         config.embeddings.model_name = "nv-embedqa-e5-v5"
-        
+
         # Ranking config
         config.ranking.enable_reranker = True
         config.ranking.server_url = "http://localhost:8004"
         config.ranking.model_name = "nv-rerankqa-mistral-4b-v3"
-        
+
         # Guardrails config
         config.enable_guardrails = True
-        
+
         return config
 
     @pytest.mark.asyncio
     async def test_check_all_services_health_success(self, mock_config):
         """Test successful check of all services"""
         mock_vdb_op = MagicMock()
-        mock_vdb_op.check_health = AsyncMock(return_value={
-            "service": "Vector Store (milvus)",
-            "status": "healthy",
-            "latency_ms": 50
-        })
+        mock_vdb_op.check_health = AsyncMock(
+            return_value={
+                "service": "Vector Store (milvus)",
+                "status": "healthy",
+                "latency_ms": 50,
+            }
+        )
 
         # Create side effect function to return proper service health results
         def mock_service_health_side_effect(*args, **kwargs):
-            service_name = kwargs.get('service_name', args[1] if len(args) > 1 else 'Unknown')
+            service_name = kwargs.get(
+                "service_name", args[1] if len(args) > 1 else "Unknown"
+            )
             return {
                 "service": service_name,
                 "status": "healthy",
                 "latency_ms": 100,
-                "url": args[0] if args else "http://localhost:8000"
+                "url": args[0] if args else "http://localhost:8000",
             }
 
-        with patch("nvidia_rag.rag_server.health.get_config", return_value=mock_config):
-            with patch.dict(os.environ, {
-                "NEMO_GUARDRAILS_URL": "http://localhost:8005",
-                "ENABLE_REFLECTION": "true",
-                "REFLECTION_LLM": "llama-2-13b-chat",
-                "REFLECTION_LLM_SERVERURL": "http://localhost:8006"
-            }):
-                with patch("nvidia_rag.rag_server.health.check_minio_health") as mock_minio:
-                    with patch("nvidia_rag.rag_server.health.check_service_health", side_effect=mock_service_health_side_effect) as mock_service:
-                        
+        with patch("nvidia_rag.utils.common.get_config", return_value=mock_config):
+            with patch.dict(
+                os.environ,
+                {
+                    "NEMO_GUARDRAILS_URL": "http://localhost:8005",
+                    "ENABLE_REFLECTION": "true",
+                    "REFLECTION_LLM": "llama-2-13b-chat",
+                    "REFLECTION_LLM_SERVERURL": "http://localhost:8006",
+                },
+            ):
+                with patch(
+                    "nvidia_rag.rag_server.health.check_minio_health"
+                ) as mock_minio:
+                    with patch(
+                        "nvidia_rag.rag_server.health.check_service_health",
+                        side_effect=mock_service_health_side_effect,
+                    ):
                         # Setup mock returns
-                        mock_minio.return_value = {"service": "MinIO", "status": "healthy"}
+                        mock_minio.return_value = {
+                            "service": "MinIO",
+                            "status": "healthy",
+                        }
 
                         result = await check_all_services_health(mock_vdb_op)
 
@@ -355,7 +396,9 @@ class TestCheckAllServicesHealth:
                         assert "nim" in result
                         assert len(result["databases"]) == 1
                         assert len(result["object_storage"]) == 1
-                        assert len(result["nim"]) >= 5  # LLM, Query Rewriter, Embeddings, Ranking, Guardrails
+                        assert (
+                            len(result["nim"]) >= 5
+                        )  # LLM, Query Rewriter, Embeddings, Ranking, Guardrails
 
     @pytest.mark.asyncio
     async def test_check_all_services_health_nvidia_api_catalog(self, mock_config):
@@ -364,25 +407,31 @@ class TestCheckAllServicesHealth:
         mock_config.llm.server_url = "https://integrate.api.nvidia.com/v1"
         mock_config.query_rewriter.server_url = "https://ai.api.nvidia.com/v1"
         mock_config.embeddings.server_url = "https://api.nvcf.nvidia.com/v2"
-        mock_config.ranking.server_url = ""  # Empty URL should be treated as API catalog
+        mock_config.ranking.server_url = (
+            ""  # Empty URL should be treated as API catalog
+        )
 
         mock_vdb_op = MagicMock()
-        mock_vdb_op.check_health = AsyncMock(return_value={
-            "service": "Vector Store",
-            "status": "healthy"
-        })
+        mock_vdb_op.check_health = AsyncMock(
+            return_value={"service": "Vector Store", "status": "healthy"}
+        )
 
-        with patch("nvidia_rag.rag_server.health.get_config", return_value=mock_config):
+        with patch("nvidia_rag.utils.common.get_config", return_value=mock_config):
             with patch("nvidia_rag.rag_server.health.check_minio_health"):
-                
                 result = await check_all_services_health(mock_vdb_op)
 
                 nim_services = result["nim"]
-                
+
                 # Find API catalog services
-                api_catalog_services = [s for s in nim_services if s.get("message") == "Using NVIDIA API Catalog"]
-                assert len(api_catalog_services) >= 4  # LLM, Query Rewriter, Embeddings, Ranking
-                
+                api_catalog_services = [
+                    s
+                    for s in nim_services
+                    if s.get("message") == "Using NVIDIA API Catalog"
+                ]
+                assert (
+                    len(api_catalog_services) >= 4
+                )  # LLM, Query Rewriter, Embeddings, Ranking
+
                 # Check that all API catalog services are marked as healthy
                 for service in api_catalog_services:
                     assert service["status"] == "healthy"
@@ -397,33 +446,41 @@ class TestCheckAllServicesHealth:
         mock_config.enable_guardrails = False
 
         mock_vdb_op = MagicMock()
-        mock_vdb_op.check_health = AsyncMock(return_value={
-            "service": "Vector Store",
-            "status": "healthy"
-        })
+        mock_vdb_op.check_health = AsyncMock(
+            return_value={"service": "Vector Store", "status": "healthy"}
+        )
 
         # Create side effect function to return proper service health results
         def mock_service_health_side_effect(*args, **kwargs):
-            service_name = kwargs.get('service_name', args[1] if len(args) > 1 else 'Unknown')
+            service_name = kwargs.get(
+                "service_name", args[1] if len(args) > 1 else "Unknown"
+            )
             return {
                 "service": service_name,
                 "status": "healthy",
                 "latency_ms": 100,
-                "url": args[0] if args else "http://localhost:8000"
+                "url": args[0] if args else "http://localhost:8000",
             }
 
-        with patch("nvidia_rag.rag_server.health.get_config", return_value=mock_config):
+        with patch("nvidia_rag.utils.common.get_config", return_value=mock_config):
             with patch.dict(os.environ, {"ENABLE_REFLECTION": "false"}):
-                with patch("nvidia_rag.rag_server.health.check_minio_health") as mock_minio:
-                    with patch("nvidia_rag.rag_server.health.check_service_health", side_effect=mock_service_health_side_effect) as mock_service:
-                        
-                        mock_minio.return_value = {"service": "MinIO", "status": "healthy"}
-                        
+                with patch(
+                    "nvidia_rag.rag_server.health.check_minio_health"
+                ) as mock_minio:
+                    with patch(
+                        "nvidia_rag.rag_server.health.check_service_health",
+                        side_effect=mock_service_health_side_effect,
+                    ):
+                        mock_minio.return_value = {
+                            "service": "MinIO",
+                            "status": "healthy",
+                        }
+
                         result = await check_all_services_health(mock_vdb_op)
 
                         nim_services = result["nim"]
                         service_names = [s["service"] for s in nim_services]
-                        
+
                         # Should only have LLM and Embeddings (required services)
                         assert "LLM" in service_names
                         assert "Embeddings" in service_names
@@ -436,28 +493,37 @@ class TestCheckAllServicesHealth:
     async def test_check_all_services_health_vector_store_error(self, mock_config):
         """Test with vector store health check error"""
         mock_vdb_op = MagicMock()
-        mock_vdb_op.check_health.side_effect = Exception("Vector store connection failed")
+        mock_vdb_op.check_health.side_effect = Exception(
+            "Vector store connection failed"
+        )
 
         # Create side effect function to return proper service health results
         def mock_service_health_side_effect(*args, **kwargs):
-            service_name = kwargs.get('service_name', args[1] if len(args) > 1 else 'Unknown')
+            service_name = kwargs.get(
+                "service_name", args[1] if len(args) > 1 else "Unknown"
+            )
             return {
                 "service": service_name,
                 "status": "healthy",
                 "latency_ms": 100,
-                "url": args[0] if args else "http://localhost:8000"
+                "url": args[0] if args else "http://localhost:8000",
             }
 
-        with patch("nvidia_rag.rag_server.health.get_config", return_value=mock_config):
+        with patch("nvidia_rag.utils.common.get_config", return_value=mock_config):
             with patch("nvidia_rag.rag_server.health.check_minio_health"):
-                with patch("nvidia_rag.rag_server.health.check_service_health", side_effect=mock_service_health_side_effect):
-                    
+                with patch(
+                    "nvidia_rag.rag_server.health.check_service_health",
+                    side_effect=mock_service_health_side_effect,
+                ):
                     result = await check_all_services_health(mock_vdb_op)
 
                     db_services = result["databases"]
                     assert len(db_services) == 1
                     assert db_services[0]["status"] == "unknown"
-                    assert "Error checking vector store health: Vector store connection failed" in db_services[0]["error"]
+                    assert (
+                        "Error checking vector store health: Vector store connection failed"
+                        in db_services[0]["error"]
+                    )
 
     @pytest.mark.asyncio
     async def test_check_all_services_health_no_minio_endpoint(self, mock_config):
@@ -465,13 +531,11 @@ class TestCheckAllServicesHealth:
         mock_config.minio.endpoint = ""
 
         mock_vdb_op = MagicMock()
-        mock_vdb_op.check_health = AsyncMock(return_value={
-            "service": "Vector Store",
-            "status": "healthy"
-        })
+        mock_vdb_op.check_health = AsyncMock(
+            return_value={"service": "Vector Store", "status": "healthy"}
+        )
 
-        with patch("nvidia_rag.rag_server.health.get_config", return_value=mock_config):
-            
+        with patch("nvidia_rag.utils.common.get_config", return_value=mock_config):
             result = await check_all_services_health(mock_vdb_op)
 
             # Should have no object storage entries when endpoint is empty
@@ -483,31 +547,36 @@ class TestCheckAllServicesHealth:
         mock_config.enable_guardrails = True
 
         mock_vdb_op = MagicMock()
-        mock_vdb_op.check_health = AsyncMock(return_value={
-            "service": "Vector Store",
-            "status": "healthy"
-        })
+        mock_vdb_op.check_health = AsyncMock(
+            return_value={"service": "Vector Store", "status": "healthy"}
+        )
 
         # Create side effect function to return proper service health results
         def mock_service_health_side_effect(*args, **kwargs):
-            service_name = kwargs.get('service_name', args[1] if len(args) > 1 else 'Unknown')
+            service_name = kwargs.get(
+                "service_name", args[1] if len(args) > 1 else "Unknown"
+            )
             return {
                 "service": service_name,
                 "status": "healthy",
                 "latency_ms": 100,
-                "url": args[0] if args else "http://localhost:8000"
+                "url": args[0] if args else "http://localhost:8000",
             }
 
-        with patch("nvidia_rag.rag_server.health.get_config", return_value=mock_config):
+        with patch("nvidia_rag.utils.common.get_config", return_value=mock_config):
             with patch.dict(os.environ, {"NEMO_GUARDRAILS_URL": ""}):
                 with patch("nvidia_rag.rag_server.health.check_minio_health"):
-                    with patch("nvidia_rag.rag_server.health.check_service_health", side_effect=mock_service_health_side_effect):
-                        
+                    with patch(
+                        "nvidia_rag.rag_server.health.check_service_health",
+                        side_effect=mock_service_health_side_effect,
+                    ):
                         result = await check_all_services_health(mock_vdb_op)
 
                         nim_services = result["nim"]
-                        guardrails_services = [s for s in nim_services if s["service"] == "NemoGuardrails"]
-                        
+                        guardrails_services = [
+                            s for s in nim_services if s["service"] == "NemoGuardrails"
+                        ]
+
                         assert len(guardrails_services) == 1
                         assert guardrails_services[0]["status"] == "skipped"
                         assert guardrails_services[0]["message"] == "URL not provided"
@@ -519,16 +588,29 @@ class TestPrintHealthReport:
     def test_print_health_report_all_healthy(self, caplog):
         """Test printing report with all healthy services"""
         health_results = {
-            "databases": [
-                {"service": "Milvus", "status": "healthy", "latency_ms": 45}
-            ],
+            "databases": [{"service": "Milvus", "status": "healthy", "latency_ms": 45}],
             "object_storage": [
-                {"service": "MinIO", "status": "healthy", "latency_ms": 120, "buckets": 3}
+                {
+                    "service": "MinIO",
+                    "status": "healthy",
+                    "latency_ms": 120,
+                    "buckets": 3,
+                }
             ],
             "nim": [
-                {"service": "LLM", "status": "healthy", "latency_ms": 250, "model": "llama-2-7b-chat"},
-                {"service": "Embeddings", "status": "healthy", "latency_ms": 180, "model": "nv-embedqa-e5-v5"}
-            ]
+                {
+                    "service": "LLM",
+                    "status": "healthy",
+                    "latency_ms": 250,
+                    "model": "llama-2-7b-chat",
+                },
+                {
+                    "service": "Embeddings",
+                    "status": "healthy",
+                    "latency_ms": 180,
+                    "model": "nv-embedqa-e5-v5",
+                },
+            ],
         }
 
         with caplog.at_level(logging.INFO):
@@ -547,16 +629,25 @@ class TestPrintHealthReport:
             ],
             "nim": [
                 {"service": "LLM", "status": "skipped", "error": "No URL provided"},
-                {"service": "Embeddings", "status": "unhealthy", "error": "Service unavailable"}
-            ]
+                {
+                    "service": "Embeddings",
+                    "status": "unhealthy",
+                    "error": "Service unavailable",
+                },
+            ],
         }
 
         with caplog.at_level(logging.INFO):
             print_health_report(health_results)
 
-        assert "Service 'Milvus' is not healthy - Issue: Connection timeout" in caplog.text
+        assert (
+            "Service 'Milvus' is not healthy - Issue: Connection timeout" in caplog.text
+        )
         assert "Service 'LLM' check skipped - Reason: No URL provided" in caplog.text
-        assert "Service 'Embeddings' is not healthy - Issue: Service unavailable" in caplog.text
+        assert (
+            "Service 'Embeddings' is not healthy - Issue: Service unavailable"
+            in caplog.text
+        )
 
     def test_print_health_report_empty_results(self, caplog):
         """Test printing report with empty results"""
@@ -569,10 +660,7 @@ class TestPrintHealthReport:
 
     def test_print_health_report_none_services(self, caplog):
         """Test printing report with None services"""
-        health_results = {
-            "databases": None,
-            "nim": []
-        }
+        health_results = {"databases": None, "nim": []}
 
         with caplog.at_level(logging.INFO):
             print_health_report(health_results)
@@ -583,7 +671,11 @@ class TestPrintHealthReport:
         """Test printing report with N/A latency"""
         health_results = {
             "nim": [
-                {"service": "LLM", "status": "healthy", "model": "test-model"}  # No latency_ms field
+                {
+                    "service": "LLM",
+                    "status": "healthy",
+                    "model": "test-model",
+                }  # No latency_ms field
             ]
         }
 
@@ -602,12 +694,16 @@ class TestCheckAndPrintServicesHealth:
         mock_results = {
             "databases": [{"service": "Milvus", "status": "healthy"}],
             "object_storage": [{"service": "MinIO", "status": "healthy"}],
-            "nim": [{"service": "LLM", "status": "healthy"}]
+            "nim": [{"service": "LLM", "status": "healthy"}],
         }
         mock_vdb_op = MagicMock()
 
-        with patch("nvidia_rag.rag_server.health.check_all_services_health") as mock_check:
-            with patch("nvidia_rag.rag_server.health.print_health_report") as mock_print:
+        with patch(
+            "nvidia_rag.rag_server.health.check_all_services_health"
+        ) as mock_check:
+            with patch(
+                "nvidia_rag.rag_server.health.print_health_report"
+            ) as mock_print:
                 mock_check.return_value = mock_results
 
                 result = await check_and_print_services_health(mock_vdb_op)
@@ -625,7 +721,7 @@ class TestCheckServicesHealth:
         mock_results = {
             "databases": [{"service": "Milvus", "status": "healthy"}],
             "object_storage": [{"service": "MinIO", "status": "healthy"}],
-            "nim": [{"service": "LLM", "status": "healthy"}]
+            "nim": [{"service": "LLM", "status": "healthy"}],
         }
         mock_vdb_op = MagicMock()
 

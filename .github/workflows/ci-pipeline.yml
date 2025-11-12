@@ -1,0 +1,607 @@
+name: CI Pipeline
+
+# Workflow control - mirroring GitLab workflow rules
+on:
+  pull_request:
+  workflow_dispatch:
+  schedule:
+    # Run nightly at 7.30 PM UTC or 1 AM IST
+    - cron: '30 19 * * *'
+
+env:
+  # Common environment variables
+  MILVUS_VERSION: v2.6.2
+  NV_INGEST_MAX_UTIL: 8
+  APP_VECTORSTORE_ENABLEGPUSEARCH: False
+  APP_VECTORSTORE_ENABLEGPUINDEX: False
+
+jobs:
+  # ============================================================================
+  # TEST STAGE JOBS
+  # ============================================================================
+
+  helm-blueprint-compliance:
+    name: Helm Blueprint Compliance
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Helm
+        uses: azure/setup-helm@v4
+        with:
+          version: 'latest'
+
+      - name: Add Helm repositories
+        env:
+          NGC_API_KEY: ${{ secrets.NGC_API_KEY }}
+          CI_NV_RAG_BLUEPRINT_KEY: ${{ secrets.CI_NV_RAG_BLUEPRINT_KEY }}
+        run: |
+          helm repo add nvidia-nim https://helm.ngc.nvidia.com/nim/nvidia/ --username='$oauthtoken' --password=$NGC_API_KEY
+          helm repo add nim https://helm.ngc.nvidia.com/nim/ --username='$oauthtoken' --password=$NGC_API_KEY
+          helm repo add nemo-microservices https://helm.ngc.nvidia.com/nvidia/nemo-microservices --username='$oauthtoken' --password=$NGC_API_KEY
+          helm repo add baidu-nim https://helm.ngc.nvidia.com/nim/baidu --username='$oauthtoken' --password=$NGC_API_KEY
+          helm repo add nvstaging-nim https://helm.ngc.nvidia.com/0648981100760671 --username='$oauthtoken' --password=$CI_NV_RAG_BLUEPRINT_KEY
+          helm repo update
+
+      - name: Run Helm Blueprint Compliance
+        run: |
+          # Add your helm blueprint compliance checks here
+          echo "Running Helm Blueprint Compliance checks..."
+          # The actual compliance command would depend on the blueprint compliance tool
+
+  lint:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out repository code
+        uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v3
+      - uses: pre-commit/action@v3.0.1
+
+  unit-tests:
+    name: Unit Tests
+    runs-on: ubuntu-latest
+    container:
+      image: python:3.12-slim
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Install system dependencies
+        run: |
+          apt-get update && apt-get install -y gcc && rm -rf /var/lib/apt/lists/*
+
+      - name: Install package with dependencies
+        run: |
+          pip install -e .[all]
+          pip install --no-cache-dir -r tests/unit/requirements-test.txt
+
+      - name: Run unit tests with coverage
+        run: |
+          python -m pytest -v -s --cov=src --cov-report=term-missing tests/unit
+
+  frontend-unit-tests:
+    name: Frontend Unit Tests
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Sanitize branch name
+        id: sanitize
+        run: |
+          SANITIZED_REF="${GITHUB_REF_NAME//\//-}"
+          echo "ref_name=$SANITIZED_REF" >> $GITHUB_OUTPUT
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 10
+
+      - name: Cache frontend dependencies
+        uses: actions/cache@v4
+        with:
+          path: |
+            frontend/node_modules
+            frontend/.pnpm-store
+          key: frontend-deps-${{ github.ref_name }}
+          restore-keys: |
+            frontend-deps-
+
+      - name: Configure pnpm and install dependencies
+        working-directory: frontend
+        run: |
+          pnpm config set store-dir .pnpm-store
+          pnpm install --frozen-lockfile || pnpm install
+
+      - name: Run frontend unit tests with coverage
+        working-directory: frontend
+        run: |
+          pnpm test:coverage
+
+      - name: Upload coverage artifacts
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: frontend-coverage-${{ steps.sanitize.outputs.ref_name }}-${{ github.sha }}
+          path: frontend/coverage/
+          retention-days: 7
+
+  check-markdown-links:
+    name: Check Markdown Links
+    runs-on: ubuntu-latest
+    container:
+      image: python:3.12-slim
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Install required packages
+        run: |
+          pip install --no-cache-dir requests
+
+      - name: Run markdown link checker
+        run: |
+          python ci/check_markdown_links.py --root . --no-external
+
+  # ============================================================================
+  # INTEGRATION TESTS STAGE
+  # ============================================================================
+
+  integration-tests:
+    name: Integration Tests
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Install NGC CLI
+        env:          
+          NGC_API_KEY: ${{ secrets.CI_NV_RAG_BLUEPRINT_KEY }}
+        run: |
+          echo "Installing NGC CLI..."
+          wget --content-disposition https://api.ngc.nvidia.com/v2/resources/nvidia/ngc-apps/ngc_cli/versions/4.9.10/files/ngccli_linux.zip -O ngccli_linux.zip
+          unzip -o ngccli_linux.zip
+          chmod u+x ngc-cli/ngc
+          
+          # Add NGC CLI to PATH for subsequent steps
+          echo "$(pwd)/ngc-cli" >> $GITHUB_PATH
+          
+          echo "NGC CLI installed successfully"
+          
+      - name: Download test data files
+        env:
+          NGC_API_KEY: ${{ secrets.CI_NV_RAG_BLUEPRINT_KEY }}
+        run: |
+          echo "Downloading test data files to tests/data..."
+          # Create tests/data directory if it doesn't exist
+          mkdir -p tests/data
+          
+          # Download integration test dataset from NGC
+          echo "Downloading integration_test_dataset:2.4.0 from NGC..."
+          ngc registry resource download-version "0648981100760671/integration_test_dataset:2.4.0" --dest ./tests/data --org 0648981100760671
+          
+          # Move files from subdirectory to tests/data root
+          echo "Moving files to tests/data root directory..."
+          if [ -d "tests/data/integration_test_dataset_v2.4.0" ]; then
+            mv tests/data/integration_test_dataset_v2.4.0/* tests/data/
+            rmdir tests/data/integration_test_dataset_v2.4.0
+            echo "Files moved successfully"
+          else
+            echo "Warning: integration_test_dataset_v2.4.0 directory not found"
+          fi
+          
+          # Verify downloads
+          echo "Files in tests/data:"
+          ls -lh tests/data/
+          
+          echo "Test data download completed"
+
+      - name: Docker info
+        run: docker info
+
+      - name: Clean up existing containers
+        run: |
+          echo "Cleaning up existing containers..."
+          docker ps -a
+          docker stop $(docker ps -aq) || true
+          docker rm $(docker ps -aq) || true
+
+      - name: Load common environment variables
+        run: |
+          echo "Loading common environment variables..."
+          export TAG=$(echo ${GITHUB_REF_NAME} | sed 's/[^a-zA-Z0-9]/-/g')-${GITHUB_SHA::7}
+          export NGC_API_KEY=${{ secrets.NGC_API_KEY }}
+          export DOCKER_VOLUME_DIRECTORY=/tmp/milvus-${MILVUS_VERSION}
+          export INGESTOR_SERVER_EXTERNAL_VOLUME_MOUNT=/tmp/ingestor-server-data
+          echo "TAG=$TAG" >> $GITHUB_ENV
+          echo "NGC_API_KEY=$NGC_API_KEY" >> $GITHUB_ENV
+          echo "DOCKER_VOLUME_DIRECTORY=$DOCKER_VOLUME_DIRECTORY" >> $GITHUB_ENV
+          echo "INGESTOR_SERVER_EXTERNAL_VOLUME_MOUNT=$INGESTOR_SERVER_EXTERNAL_VOLUME_MOUNT" >> $GITHUB_ENV
+          
+          # Load nvdev.env and export all variables to GITHUB_ENV
+          if [ -f ./deploy/compose/nvdev.env ]; then
+            set -a
+            source ./deploy/compose/nvdev.env
+            set +a
+            # Export all variables from nvdev.env to GITHUB_ENV
+            grep -E '^export ' ./deploy/compose/nvdev.env | sed 's/export //' | while IFS='=' read -r key value; do
+              # Evaluate the value to expand any variable references
+              eval "resolved_value=\"$value\""
+              echo "$key=$resolved_value" >> $GITHUB_ENV
+            done
+          fi
+
+      - name: Docker login
+        env:
+          CI_NV_RAG_BLUEPRINT_KEY: ${{ secrets.CI_NV_RAG_BLUEPRINT_KEY }}
+        run: |
+          echo "$CI_NV_RAG_BLUEPRINT_KEY" | docker login nvcr.io -u '$oauthtoken' --password-stdin
+
+      - name: Start services
+        run: |
+          echo "Starting vector database services..."
+          docker compose -f tests/integration/vectordb.yaml up -d
+          echo "Starting RAG server..."
+          docker compose -f deploy/compose/docker-compose-rag-server.yaml up -d --build
+          echo "Starting ingestor server..."
+          docker compose -f deploy/compose/docker-compose-ingestor-server.yaml up -d --build
+          echo "Waiting for services to be ready..."
+          sleep 30
+          echo "Checking service status..."
+          docker ps
+
+      - name: Print logs for running containers
+        run: |
+          echo "=== LOGS FOR RUNNING CONTAINERS ==="
+          docker logs --tail 50 milvus-standalone || echo "No logs for milvus-standalone"
+          docker logs --tail 50 milvus-etcd || echo "No logs for milvus-etcd"
+          docker logs --tail 50 milvus-minio || echo "No logs for milvus-minio"
+          docker logs rag-server || echo "No logs for rag-server"
+          docker logs ingestor-server || echo "No logs for ingestor-server"
+          echo "Deploy stage completed successfully"
+
+      # ========================================================================
+      # BASIC TESTS
+      # ========================================================================
+      
+      - name: Setup Python environment for tests
+        run: |
+          rm -rf venv || echo "No existing venv to clean up"
+          python3 --version || echo "Python3 not found"
+          pip3 --version || echo "pip3 not found"
+          python3 -m venv venv
+          source venv/bin/activate
+          pip install -r tests/integration/requirements.txt
+
+      - name: Run basic integration tests
+        run: |
+          source venv/bin/activate
+          echo "Running basic integration tests..."
+          python -m tests.integration.main
+          echo "Basic integration tests completed"
+
+      - name: Collect logs after basic tests
+        if: always()
+        run: |
+          echo "Collecting container logs..."
+          mkdir -p logs/basic-tests
+          docker logs rag-server > logs/basic-tests/rag-server.log 2>&1 || true
+          docker logs ingestor-server > logs/basic-tests/ingestor-server.log 2>&1 || true
+          docker logs compose-nv-ingest-ms-runtime-1 > logs/basic-tests/nvingest.log 2>&1 || true
+          cp tests/integration/integration_test.log logs/basic-tests/ 2>/dev/null || true
+
+      # ========================================================================
+      # REFLECTION TESTS
+      # ========================================================================
+      
+      - name: Configure environment for reflection tests
+        run: |
+          echo "ENABLE_REFLECTION=True" >> $GITHUB_ENV
+          echo "RESPONSE_GROUNDEDNESS_THRESHOLD=3" >> $GITHUB_ENV
+
+      - name: Restart services for reflection tests
+        env:
+          CI_NV_RAG_BLUEPRINT_KEY: ${{ secrets.CI_NV_RAG_BLUEPRINT_KEY }}
+        run: |
+          echo "Restarting services with reflection configuration..."
+          docker compose -f deploy/compose/docker-compose-rag-server.yaml down || true
+          docker compose -f deploy/compose/docker-compose-ingestor-server.yaml down || true
+          sleep 5
+          docker compose -f deploy/compose/docker-compose-rag-server.yaml up -d --build
+          docker compose -f deploy/compose/docker-compose-ingestor-server.yaml up -d --build
+          sleep 30
+          docker ps
+
+      - name: Run reflection integration tests
+        run: |
+          source venv/bin/activate
+          echo "Running reflection integration tests..."
+          python -m tests.integration.main --sequence reflection
+          echo "Reflection integration tests completed"
+
+      - name: Collect logs after reflection tests
+        if: always()
+        run: |
+          mkdir -p logs/reflection
+          docker logs rag-server > logs/reflection/rag-server.log 2>&1 || true
+          docker logs ingestor-server > logs/reflection/ingestor-server.log 2>&1 || true
+          docker logs compose-nv-ingest-ms-runtime-1 > logs/reflection/nvingest.log 2>&1 || true
+          cp tests/integration/integration_test.log logs/reflection/ 2>/dev/null || true
+
+      # ========================================================================
+      # NEMO GUARDRAILS TESTS
+      # ========================================================================
+      
+      - name: Configure environment for guardrails tests
+        run: |
+          echo "ENABLE_GUARDRAILS=True" >> $GITHUB_ENV
+          # Unset reflection settings
+          echo "ENABLE_REFLECTION=False" >> $GITHUB_ENV
+
+      - name: Restart services for guardrails tests
+        env:
+          CI_NV_RAG_BLUEPRINT_KEY: ${{ secrets.CI_NV_RAG_BLUEPRINT_KEY }}
+        run: |
+          echo "Restarting services with guardrails configuration..."
+          docker compose -f deploy/compose/docker-compose-rag-server.yaml down || true
+          docker compose -f deploy/compose/docker-compose-ingestor-server.yaml down || true
+          sleep 5
+          docker compose -f deploy/compose/docker-compose-rag-server.yaml up -d --build
+          docker compose -f deploy/compose/docker-compose-ingestor-server.yaml up -d --build
+          sleep 30
+          docker ps
+
+      - name: Start NemoGuardrails microservice
+        run: |
+          echo "Starting NemoGuardrails microservice..."
+          docker compose -f deploy/compose/docker-compose-nemo-guardrails.yaml up -d --no-deps nemo-guardrails-microservice
+          sleep 30
+
+      - name: Run NemoGuardrails integration tests
+        run: |
+          source venv/bin/activate
+          echo "Running NemoGuardrails integration tests..."
+          python -m tests.integration.main --sequence nemo_guardrails
+          echo "NemoGuardrails integration tests completed"
+
+      - name: Collect logs after guardrails tests
+        if: always()
+        run: |
+          mkdir -p logs/nemo-guardrails
+          docker logs rag-server > logs/nemo-guardrails/rag-server.log 2>&1 || true
+          docker logs ingestor-server > logs/nemo-guardrails/ingestor-server.log 2>&1 || true
+          docker logs compose-nv-ingest-ms-runtime-1 > logs/nemo-guardrails/nvingest.log 2>&1 || true
+          docker logs nemo-guardrails-microservice > logs/nemo-guardrails/nemo-guardrails.log 2>&1 || true
+          cp tests/integration/integration_test.log logs/nemo-guardrails/ 2>/dev/null || true
+
+      - name: Stop NemoGuardrails microservice
+        if: always()
+        run: |
+          docker compose -f deploy/compose/docker-compose-nemo-guardrails.yaml down nemo-guardrails-microservice || true
+
+      # ========================================================================
+      # IMAGE CAPTIONING TESTS
+      # ========================================================================
+      
+      - name: Configure environment for image captioning tests
+        run: |
+          echo "APP_NVINGEST_EXTRACTIMAGES=True" >> $GITHUB_ENV
+          echo "ENABLE_GUARDRAILS=False" >> $GITHUB_ENV
+
+      - name: Restart services for image captioning tests
+        env:
+          CI_NV_RAG_BLUEPRINT_KEY: ${{ secrets.CI_NV_RAG_BLUEPRINT_KEY }}
+        run: |
+          echo "Restarting services with image captioning configuration..."
+          docker compose -f deploy/compose/docker-compose-rag-server.yaml down || true
+          docker compose -f deploy/compose/docker-compose-ingestor-server.yaml down || true
+          sleep 5
+          docker compose -f deploy/compose/docker-compose-rag-server.yaml up -d --build
+          docker compose -f deploy/compose/docker-compose-ingestor-server.yaml up -d --build
+          sleep 30
+          docker ps
+
+      - name: Run image captioning integration tests
+        run: |
+          source venv/bin/activate
+          echo "Running image captioning integration tests..."
+          python -m tests.integration.main --sequence image_captioning
+          echo "Image captioning integration tests completed"
+
+      - name: Collect logs after image captioning tests
+        if: always()
+        run: |
+          mkdir -p logs/image-captioning
+          docker logs rag-server > logs/image-captioning/rag-server.log 2>&1 || true
+          docker logs ingestor-server > logs/image-captioning/ingestor-server.log 2>&1 || true
+          docker logs compose-nv-ingest-ms-runtime-1 > logs/image-captioning/nvingest.log 2>&1 || true
+          cp tests/integration/integration_test.log logs/image-captioning/ 2>/dev/null || true
+
+      # ========================================================================
+      # VLM GENERATION TESTS
+      # ========================================================================
+      
+      - name: Configure environment for VLM generation tests
+        run: |
+          echo "ENABLE_VLM_INFERENCE=True" >> $GITHUB_ENV
+          echo "APP_NVINGEST_EXTRACTIMAGES=False" >> $GITHUB_ENV
+
+      - name: Restart services for VLM generation tests
+        env:
+          CI_NV_RAG_BLUEPRINT_KEY: ${{ secrets.CI_NV_RAG_BLUEPRINT_KEY }}
+        run: |
+          echo "Restarting services with VLM generation configuration..."
+          docker compose -f deploy/compose/docker-compose-rag-server.yaml down || true
+          docker compose -f deploy/compose/docker-compose-ingestor-server.yaml down || true
+          sleep 5
+          docker compose -f deploy/compose/docker-compose-rag-server.yaml up -d --build
+          docker compose -f deploy/compose/docker-compose-ingestor-server.yaml up -d --build
+          sleep 30
+          docker ps
+
+      - name: Run VLM generation integration tests
+        run: |
+          source venv/bin/activate
+          echo "Running VLM generation integration tests..."
+          python -m tests.integration.main --sequence vlm_generation
+          echo "VLM generation integration tests completed"
+
+      - name: Collect logs after VLM generation tests
+        if: always()
+        run: |
+          mkdir -p logs/vlm-generation
+          docker logs rag-server > logs/vlm-generation/rag-server.log 2>&1 || true
+          docker logs ingestor-server > logs/vlm-generation/ingestor-server.log 2>&1 || true
+          docker logs compose-nv-ingest-ms-runtime-1 > logs/vlm-generation/nvingest.log 2>&1 || true
+          cp tests/integration/integration_test.log logs/vlm-generation/ 2>/dev/null || true
+
+      # ========================================================================
+      # CUSTOM PROMPT TESTS
+      # ========================================================================
+      
+      - name: Configure environment for custom prompt tests
+        run: |
+          echo "PROMPT_CONFIG_FILE=$(pwd)/tests/data/test_prompt.yaml" >> $GITHUB_ENV
+          echo "ENABLE_VLM_INFERENCE=False" >> $GITHUB_ENV
+
+      - name: Restart services for custom prompt tests
+        env:
+          CI_NV_RAG_BLUEPRINT_KEY: ${{ secrets.CI_NV_RAG_BLUEPRINT_KEY }}
+        run: |
+          echo "Restarting services with custom prompt configuration..."
+          docker compose -f deploy/compose/docker-compose-rag-server.yaml down || true
+          docker compose -f deploy/compose/docker-compose-ingestor-server.yaml down || true
+          sleep 5
+          docker compose -f deploy/compose/docker-compose-rag-server.yaml up -d --build
+          docker compose -f deploy/compose/docker-compose-ingestor-server.yaml up -d --build
+          sleep 30
+          docker ps
+
+      - name: Run custom prompt integration tests
+        run: |
+          source venv/bin/activate
+          echo "Running custom prompt integration tests..."
+          python -m tests.integration.main --sequence custom_prompt
+          echo "Custom prompt integration tests completed"
+
+      - name: Collect logs after custom prompt tests
+        if: always()
+        run: |
+          mkdir -p logs/custom-prompt
+          docker logs rag-server > logs/custom-prompt/rag-server.log 2>&1 || true
+          docker logs ingestor-server > logs/custom-prompt/ingestor-server.log 2>&1 || true
+          docker logs compose-nv-ingest-ms-runtime-1 > logs/custom-prompt/nvingest.log 2>&1 || true
+          cp tests/integration/integration_test.log logs/custom-prompt/ 2>/dev/null || true
+
+      # ========================================================================
+      # OBSERVABILITY TESTS
+      # ========================================================================
+      
+      - name: Configure environment for observability tests
+        run: |
+          echo "APP_TRACING_ENABLED=True" >> $GITHUB_ENV
+          echo "OPENTELEMETRY_CONFIG_FILE=$(pwd)/deploy/config/otel-collector-config.yaml" >> $GITHUB_ENV
+          echo "PROMPT_CONFIG_FILE=${PWD}/src/nvidia_rag/rag_server/prompt.yaml" >> $GITHUB_ENV
+
+      - name: Restart services for observability tests
+        env:
+          CI_NV_RAG_BLUEPRINT_KEY: ${{ secrets.CI_NV_RAG_BLUEPRINT_KEY }}
+        run: |
+          echo "Restarting services with observability configuration..."
+          docker compose -f deploy/compose/docker-compose-rag-server.yaml down || true
+          docker compose -f deploy/compose/docker-compose-ingestor-server.yaml down || true
+          sleep 5
+          docker compose -f deploy/compose/docker-compose-rag-server.yaml up -d --build
+          docker compose -f deploy/compose/docker-compose-ingestor-server.yaml up -d --build
+          sleep 30
+          docker ps
+
+      - name: Start observability services
+        run: |
+          echo "Starting observability services..."
+          docker compose -f deploy/compose/observability.yaml up -d
+          sleep 30
+
+      - name: Run observability integration tests
+        run: |
+          source venv/bin/activate
+          echo "Running observability integration tests..."
+          python -m tests.integration.main --sequence observability
+          echo "Observability integration tests completed"
+
+      - name: Collect logs after observability tests
+        if: always()
+        run: |
+          mkdir -p logs/observability
+          docker logs rag-server > logs/observability/rag-server.log 2>&1 || true
+          docker logs ingestor-server > logs/observability/ingestor-server.log 2>&1 || true
+          docker logs compose-nv-ingest-ms-runtime-1 > logs/observability/nvingest.log 2>&1 || true
+          docker logs otel-collector > logs/observability/otel-collector.log 2>&1 || true
+          docker logs zipkin > logs/observability/zipkin.log 2>&1 || true
+          docker logs prometheus > logs/observability/prometheus.log 2>&1 || true
+          docker logs grafana-service > logs/observability/grafana.log 2>&1 || true
+          cp tests/integration/integration_test.log logs/observability/ 2>/dev/null || true
+
+      - name: Stop observability services
+        if: always()
+        run: |
+          docker compose -f deploy/compose/observability.yaml down || true
+
+      # ========================================================================
+      # UPLOAD ALL LOGS
+      # ========================================================================
+      
+      - name: Sanitize branch name for artifacts
+        if: always()
+        id: sanitize
+        run: |
+          SANITIZED_REF="${GITHUB_REF_NAME//\//-}"
+          echo "ref_name=$SANITIZED_REF" >> $GITHUB_OUTPUT
+
+      - name: Upload all integration test logs
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: integration-tests-logs-${{ steps.sanitize.outputs.ref_name }}-${{ github.sha }}
+          path: logs/
+          retention-days: 7
+
+      # ========================================================================
+      # CLEANUP
+      # ========================================================================
+      
+      - name: Cleanup virtual environment
+        if: always()
+        run: |
+          echo "Cleaning up virtual environment..."
+          rm -rf venv
+          echo "Virtual environment cleanup completed"
+
+      - name: Cleanup Docker containers and volumes
+        if: always()
+        run: |
+          echo "Cleaning up integration test environment..."
+          # Stop and remove all containers first
+          docker stop $(docker ps -aq) || true
+          docker rm $(docker ps -aq) || true
+          # Now try to bring down the compose stacks
+          docker compose -f deploy/compose/docker-compose-ingestor-server.yaml down -v || true
+          docker compose -f deploy/compose/docker-compose-rag-server.yaml down -v || true
+          docker compose -f tests/integration/vectordb.yaml down -v || true
+          # Remove any remaining networks
+          docker network prune -f || true
+          # Clean up Docker system
+          docker system prune -f || true
+          # Delete specific images to free up space
+          echo "Deleting ingestor-server and rag-server images..."
+          docker images | grep "ingestor-server" | awk '{print $3}' | xargs -r docker rmi -f || echo "No ingestor-server images to delete"
+          docker images | grep "rag-server" | awk '{print $3}' | xargs -r docker rmi -f || echo "No rag-server images to delete"
+          docker images | grep "rag-frontend" | awk '{print $3}' | xargs -r docker rmi -f || echo "No rag-frontend images to delete"
+          echo "Cleanup completed"

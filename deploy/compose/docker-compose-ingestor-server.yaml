@@ -3,7 +3,7 @@ services:
   # Main ingestor server which is responsible for ingestion
   ingestor-server:
     container_name: ingestor-server
-    image: nvcr.io/nvidia/blueprint/ingestor-server:${TAG:-2.3.0}
+    image: nvcr.io/0648981100760671/ingestor-server:${TAG:-latest}
     build:
       # Set context to repo's root directory
       context: ../../
@@ -38,6 +38,14 @@ services:
       APP_VECTORSTORE_ENABLEGPUINDEX: ${APP_VECTORSTORE_ENABLEGPUINDEX:-True}
       # Boolean to control GPU search for milvus vectorstore specific to nvingest
       APP_VECTORSTORE_ENABLEGPUSEARCH: ${APP_VECTORSTORE_ENABLEGPUSEARCH:-True}
+      # Username for vector store
+      APP_VECTORSTORE_USERNAME: ${APP_VECTORSTORE_USERNAME:-""}
+      APP_VECTORSTORE_PASSWORD: ${APP_VECTORSTORE_PASSWORD:-""}
+      # Elasticsearch API key auth (optional). Prefer these over username/password when set.
+      # Provide either base64 APP_VECTORSTORE_APIKEY or split ID/SECRET.
+      APP_VECTORSTORE_APIKEY_ID: ${APP_VECTORSTORE_APIKEY_ID:-""}
+      APP_VECTORSTORE_APIKEY_SECRET: ${APP_VECTORSTORE_APIKEY_SECRET:-""}
+      APP_VECTORSTORE_APIKEY: ${APP_VECTORSTORE_APIKEY:-""}
       # vectorstore collection name to store embeddings
       COLLECTION_NAME: ${COLLECTION_NAME:-multimodal_data}
 
@@ -48,10 +56,6 @@ services:
 
       NGC_API_KEY: ${NGC_API_KEY:?"NGC_API_KEY is required"}
       NVIDIA_API_KEY: ${NGC_API_KEY:?"NGC_API_KEY is required"}
-
-      # Set LLM_API_KEY if non-NVIDIA hosted LLM API endpoint is being used
-      # If not set, NVIDIA_API_KEY will be used as fallback
-      LLM_API_KEY: ${LLM_API_KEY:-""}
 
       ##===Embedding Model specific configurations===
       # url on which embedding model is hosted. If "", Nvidia hosted API is used
@@ -102,6 +106,8 @@ services:
       SUMMARY_LLM_SERVERURL: ${SUMMARY_LLM_SERVERURL-"nim-llm:8000"}
       SUMMARY_LLM_MAX_CHUNK_LENGTH: ${SUMMARY_LLM_MAX_CHUNK_LENGTH:-50000}
       SUMMARY_CHUNK_OVERLAP: ${SUMMARY_CHUNK_OVERLAP:-200}
+      SUMMARY_LLM_TEMPERATURE: ${SUMMARY_LLM_TEMPERATURE:-0.0}
+      SUMMARY_LLM_TOP_P: ${SUMMARY_LLM_TOP_P:-1.0}
       # Log level for server, supported level NOTSET, DEBUG, INFO, WARN, ERROR, CRITICAL
       LOGLEVEL: ${LOGLEVEL:-INFO}
 
@@ -131,8 +137,8 @@ services:
       - "6379:6379"
 
   nv-ingest-ms-runtime:
-    image: nvcr.io/nvidia/nemo-microservices/nv-ingest:25.9.0
-    cpuset: "0-15"
+    image:  nvcr.io/0648981100760671/nv-ingest:2025.11.11
+    # cpuset: "0-15" # Uncomment to restrict this container to CPU cores 0–15
     volumes:
       - ${DATASET_ROOT:-./data}:/workspace/data
     ports:

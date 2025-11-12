@@ -1,0 +1,71 @@
+sequences:
+  basic:
+    name: "Basic Integration Tests"
+    description: "Core functionality tests excluding advanced features"
+    test_numbers: [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 33, 34, 35, 36, 37, 38, 39, 40, 45, 46, 48, 49, 50, 51, 66, 67, 68, 69]
+    pre_sequence: [18]  # Cleanup collection before basic tests
+    post_sequence: [16, 17, 18, 19, 47, 70]  # Cleanup tests after sequence
+
+  milvus_custom_metadata:
+    name: "Milvus Custom Metadata Tests"
+    description: "Milvus custom metadata functionality tests including normalization, filtering, and LLM generation"
+    test_numbers: [1, 2, 3, 35, 36, 37]
+    pre_sequence: [18]  # Cleanup collection before metadata tests
+    post_sequence: [18]  # Cleanup tests after sequence
+
+  image_captioning:
+    name: "Image Captioning Tests"
+    description: "Image captioning functionality tests"
+    test_numbers: [26, 27, 28, 29]
+    pre_sequence: [30]  # Cleanup collection before image captioning tests
+    post_sequence: [30]  # Cleanup tests after sequence
+
+  nemo_guardrails:
+    name: "NeMo Guardrails Tests"
+    description: "NeMo Guardrails functionality tests for content safety and policy enforcement"
+    test_numbers: [21, 22, 23, 24]
+    pre_sequence: [25]  # Cleanup collection before NeMo Guardrails tests
+    post_sequence: [25]  # Cleanup tests after sequence
+
+  custom_prompt:
+    name: "Custom Prompt Tests with and without knowledge base"
+    description: "Custom prompt functionality tests with and without knowledge base"
+    test_numbers: [2, 3, 4, 5, 31, 32]
+    pre_sequence: [18]  # Cleanup collection before custom prompt tests
+    post_sequence: [18]  # Cleanup tests after sequence
+
+  elastic_search:
+    name: "Elastic Search Tests"
+    description: "Basic tests with Elastic Search"
+    test_numbers: [1, 2, 3, 4, 5, 6, 7, 8, 9, 11, 12, 13, 14]
+    pre_sequence: [18]  # Cleanup collection before basic tests
+    #post_sequence: [16, 17, 18, 19]  # Cleanup tests after sequence
+
+  file_type_check:
+    name: "File Type Check Tests"
+    description: "File type check functionality tests"
+    test_numbers: [1, 2, 39, 40, 50, 51]
+    pre_sequence: [18]  # Cleanup collection before file type check tests
+    post_sequence: [18]  # Cleanup tests after sequence
+
+  reflection:
+    name: "Self Reflection Tests"
+    description: "Self reflection functionality tests"
+    test_numbers: [43]
+    pre_sequence: [41, 42]  # Cleanup collection before file type check tests
+    post_sequence: [44]  # Cleanup tests after sequence
+
+  observability:
+    name: "Observability and Metrics Tests"
+    description: "Metrics endpoint and observability functionality tests including Prometheus integration"
+    test_numbers: [1, 2, 4, 5, 52, 53, 54, 55, 56, 57, 58, 59, 60]
+    pre_sequence: [18]  # Cleanup collection before observability tests
+    post_sequence: [18]  # Cleanup tests after sequence
+    # NOTE: Observability is optional - ensure tracing is enabled when running this sequence
+
+  vlm_generation:
+    name: "VLM Generation Tests"
+    description: "VLM generation functionality tests"
+    test_numbers: [61, 62, 63, 64]
+    pre_sequence: [65]  # Cleanup collection before VLM generation tests
+    post_sequence: [65]  # Cleanup tests after sequence

@@ -50,7 +50,7 @@ from pydantic import BaseModel, Field
 from starlette.status import HTTP_422_UNPROCESSABLE_ENTITY
 
 from nvidia_rag.ingestor_server.main import SERVER_MODE, NvidiaRAGIngestor
-from nvidia_rag.utils.common import get_config
+from nvidia_rag.utils.common import ConfigProxy
 from nvidia_rag.utils.metadata_validation import MetadataField
 
 logging.basicConfig(level=os.environ.get("LOGLEVEL", "INFO").upper())
@@ -98,7 +98,7 @@ EXAMPLE_DIR = "./"
 
 # Initialize the NVIngestIngestor class
 NV_INGEST_INGESTOR = NvidiaRAGIngestor(mode=SERVER_MODE)
-CONFIG = get_config()
+CONFIG = ConfigProxy()
 
 
 # Define the service health models in server.py
@@ -251,6 +251,8 @@ class UploadDocumentResponse(BaseModel):
         "", description="Message indicating the status of the request."
     )
     total_documents: int = Field(0, description="Total number of documents uploaded.")
+    documents_completed: int = Field(0, description="Number of documents completed.")
+    batches_completed: int = Field(0, description="Number of batches completed.")
     documents: list[UploadedDocument] = Field(
         [], description="List of uploaded documents."
     )
@@ -299,7 +301,7 @@ class UploadedCollection(BaseModel):
     num_entities: int = Field(
         0, description="Number of rows or entities in the collection."
     )
-    metadata_schema: list[MetadataField] = Field(
+    metadata_schema: list[dict[str, Any]] = Field(
         [], description="Metadata schema of the collection."
     )
 
@@ -329,7 +331,8 @@ class CreateCollectionRequest(BaseModel):
         os.getenv("COLLECTION_NAME", ""), description="Name of the collection."
     )
     embedding_dimension: int = Field(
-        2048, description="Embedding dimension of the collection."
+        os.getenv("APP_EMBEDDINGS_DIMENSIONS", 2048),
+        description="Embedding dimension of the collection.",
     )
     metadata_schema: list[MetadataField] = Field(
         [], description="Metadata schema of the collection."
@@ -522,10 +525,15 @@ async def upload_document(
         raise Exception("No files provided for uploading.")
 
     try:
-        # Store all provided file paths in a temporary directory
-        all_file_paths = await process_file_paths(documents, request.collection_name)
+        # Store all provided file paths in a temporary directory (only unique files)
+        all_file_paths, duplicate_validation_errors = await process_file_paths(
+            documents, request.collection_name
+        )
+
         response_dict = await NV_INGEST_INGESTOR.upload_documents(
-            filepaths=all_file_paths, **request.model_dump()
+            filepaths=all_file_paths,
+            **request.model_dump(),
+            additional_validation_errors=duplicate_validation_errors,
         )
         if not request.blocking:
             return JSONResponse(
@@ -600,10 +608,15 @@ async def update_documents(
     """Upload a document to the vector store. If the document already exists, it will be replaced."""
 
     try:
-        # Store all provided file paths in a temporary directory
-        all_file_paths = await process_file_paths(documents, request.collection_name)
+        # Store all provided file paths in a temporary directory (only unique files)
+        all_file_paths, duplicate_validation_errors = await process_file_paths(
+            documents, request.collection_name
+        )
+
         response_dict = await NV_INGEST_INGESTOR.update_documents(
-            filepaths=all_file_paths, **request.model_dump()
+            filepaths=all_file_paths,
+            **request.model_dump(),
+            additional_validation_errors=duplicate_validation_errors,
         )
         if not request.blocking:
             return JSONResponse(
@@ -957,8 +970,18 @@ async def delete_collections(
         )
 
 
-async def process_file_paths(filepaths: list[str], collection_name: str):
-    """Process the file paths and return the list of file paths."""
+async def process_file_paths(filepaths: list[UploadFile], collection_name: str):
+    """Process the uploaded files and return the list of file paths.
+
+    Args:
+        filepaths: List of UploadFile objects from the client
+        collection_name: Name of the collection to store files for
+
+    Returns:
+        tuple: (all_file_paths, duplicate_validation_errors)
+            - all_file_paths: List of unique file paths (strings) where files are saved
+            - duplicate_validation_errors: List of validation error dicts for duplicate files
+    """
 
     base_upload_folder = Path(
         os.path.join(CONFIG.temp_dir, f"uploaded_files/{collection_name}")
@@ -966,11 +989,24 @@ async def process_file_paths(filepaths: list[str], collection_name: str):
     base_upload_folder.mkdir(parents=True, exist_ok=True)
     all_file_paths = []
 
+    # Track filenames to detect duplicates
+    filename_counts = {}
+    processed_filenames = set()
+
     for file in filepaths:
         upload_file = os.path.basename(file.filename)
 
         if not upload_file:
             raise RuntimeError("Error parsing uploaded filename.")
+
+        # Count occurrences of each filename
+        filename_counts[upload_file] = filename_counts.get(upload_file, 0) + 1
+
+        # Only process the first occurrence of each filename
+        if upload_file in processed_filenames:
+            continue
+
+        processed_filenames.add(upload_file)
 
         # Create a unique directory for each file
         unique_dir = base_upload_folder  # / str(uuid4())
@@ -982,6 +1018,33 @@ async def process_file_paths(filepaths: list[str], collection_name: str):
         # Copy uploaded file to upload_dir directory and pass that file path to
         # ingestor server
         with open(file_path, "wb") as f:
+            file.file.seek(0)
             shutil.copyfileobj(file.file, f)
 
-    return all_file_paths
+    # Create validation errors for duplicates
+    duplicate_validation_errors = []
+    duplicates = {name: count for name, count in filename_counts.items() if count > 1}
+
+    if duplicates:
+        logger.warning(
+            f"Duplicate files detected: {len(duplicates)} unique filenames had duplicates. "
+            f"Total files submitted: {len(filepaths)}, "
+            f"Unique files to process: {len(all_file_paths)}"
+        )
+        for filename, count in duplicates.items():
+            duplicate_count = count - 1  # Subtract 1 since we keep one copy
+            logger.warning(
+                f"File '{filename}' submitted {count} times, processing only 1 copy"
+            )
+            duplicate_validation_errors.append(
+                {
+                    "error": f"File '{filename}': Total of {duplicate_count} duplicate(s) found. Duplicates were discarded and 1 file is being processed.",
+                    "metadata": {
+                        "filename": filename,
+                        "duplicate_count": duplicate_count,
+                        "total_occurrences": count,
+                    },
+                }
+            )
+
+    return all_file_paths, duplicate_validation_errors

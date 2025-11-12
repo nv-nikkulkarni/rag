@@ -14,22 +14,22 @@
 # limitations under the License.
 
 import os
-from unittest.mock import Mock, patch, MagicMock
+from unittest.mock import MagicMock, Mock, patch
 
 import pytest
 
 from nvidia_rag.ingestor_server.nvingest import (
+    ENABLE_NV_INGEST_VDB_UPLOAD,
     get_nv_ingest_client,
     get_nv_ingest_ingestor,
-    ENABLE_NV_INGEST_VDB_UPLOAD
 )
 
 
 class TestGetNvIngestClient:
     """Test get_nv_ingest_client function"""
 
-    @patch('nvidia_rag.ingestor_server.nvingest.get_config')
-    @patch('nvidia_rag.ingestor_server.nvingest.NvIngestClient')
+    @patch("nvidia_rag.utils.common.get_config")
+    @patch("nvidia_rag.ingestor_server.nvingest.NvIngestClient")
     def test_get_nv_ingest_client_success(self, mock_nv_ingest_client, mock_get_config):
         """Test get_nv_ingest_client creates client with correct parameters"""
         mock_config = Mock()
@@ -45,11 +45,10 @@ class TestGetNvIngestClient:
 
         assert result == mock_client
         mock_nv_ingest_client.assert_called_once_with(
-            message_client_hostname="test-host",
-            message_client_port=7670
+            message_client_hostname="test-host", message_client_port=7670
         )
 
-    @patch('nvidia_rag.ingestor_server.nvingest.get_config')
+    @patch("nvidia_rag.utils.common.get_config")
     def test_get_nv_ingest_client_config_error(self, mock_get_config):
         """Test get_nv_ingest_client handles config errors"""
         mock_get_config.side_effect = Exception("Config error")
@@ -68,12 +67,13 @@ class TestGetNvIngestIngestor:
         self.mock_vdb_op = Mock()
         self.mock_vdb_op.collection_name = "test_collection"
 
-    @patch('nvidia_rag.ingestor_server.nvingest.get_config')
-    @patch('nvidia_rag.ingestor_server.nvingest.get_env_variable')
-    @patch('nvidia_rag.ingestor_server.nvingest.sanitize_nim_url')
-    @patch('nvidia_rag.ingestor_server.nvingest.Ingestor')
-    def test_get_nv_ingest_ingestor_basic_config(self, mock_ingestor_class, mock_sanitize_url,
-                                                mock_get_env, mock_get_config):
+    @patch("nvidia_rag.utils.common.get_config")
+    @patch("nvidia_rag.ingestor_server.nvingest.get_env_variable")
+    @patch("nvidia_rag.ingestor_server.nvingest.sanitize_nim_url")
+    @patch("nvidia_rag.ingestor_server.nvingest.Ingestor")
+    def test_get_nv_ingest_ingestor_basic_config(
+        self, mock_ingestor_class, mock_sanitize_url, mock_get_env, mock_get_config
+    ):
         """Test get_nv_ingest_ingestor with basic configuration"""
         # Setup mocks
         mock_config = self._create_mock_config()
@@ -90,22 +90,20 @@ class TestGetNvIngestIngestor:
         mock_ingestor_instance.vdb_upload.return_value = mock_ingestor_instance
 
         result = get_nv_ingest_ingestor(
-            self.mock_client,
-            self.filepaths,
-            vdb_op=self.mock_vdb_op
+            self.mock_client, self.filepaths, vdb_op=self.mock_vdb_op
         )
 
         assert result == mock_ingestor_instance
         mock_ingestor_class.assert_called_once_with(client=self.mock_client)
         mock_ingestor_instance.files.assert_called_once_with(self.filepaths)
 
-    @patch('nvidia_rag.ingestor_server.nvingest.get_config')
-    @patch('nvidia_rag.ingestor_server.nvingest.get_env_variable')
-    @patch('nvidia_rag.ingestor_server.nvingest.sanitize_nim_url')
-    @patch('nvidia_rag.ingestor_server.nvingest.Ingestor')
-    def test_get_nv_ingest_ingestor_with_custom_split_options(self, mock_ingestor_class,
-                                                            mock_sanitize_url, mock_get_env,
-                                                            mock_get_config):
+    @patch("nvidia_rag.utils.common.get_config")
+    @patch("nvidia_rag.ingestor_server.nvingest.get_env_variable")
+    @patch("nvidia_rag.ingestor_server.nvingest.sanitize_nim_url")
+    @patch("nvidia_rag.ingestor_server.nvingest.Ingestor")
+    def test_get_nv_ingest_ingestor_with_custom_split_options(
+        self, mock_ingestor_class, mock_sanitize_url, mock_get_env, mock_get_config
+    ):
         """Test get_nv_ingest_ingestor with custom split options"""
         mock_config = self._create_mock_config()
         mock_get_config.return_value = mock_config
@@ -120,16 +118,13 @@ class TestGetNvIngestIngestor:
         mock_ingestor_instance.embed.return_value = mock_ingestor_instance
         mock_ingestor_instance.vdb_upload.return_value = mock_ingestor_instance
 
-        custom_split_options = {
-            "chunk_size": 1000,
-            "chunk_overlap": 200
-        }
+        custom_split_options = {"chunk_size": 1000, "chunk_overlap": 200}
 
         result = get_nv_ingest_ingestor(
             self.mock_client,
             self.filepaths,
             split_options=custom_split_options,
-            vdb_op=self.mock_vdb_op
+            vdb_op=self.mock_vdb_op,
         )
 
         assert result == mock_ingestor_instance
@@ -139,13 +134,13 @@ class TestGetNvIngestIngestor:
         assert call_args[1]["chunk_size"] == 1000
         assert call_args[1]["chunk_overlap"] == 200
 
-    @patch('nvidia_rag.ingestor_server.nvingest.get_config')
-    @patch('nvidia_rag.ingestor_server.nvingest.get_env_variable')
-    @patch('nvidia_rag.ingestor_server.nvingest.sanitize_nim_url')
-    @patch('nvidia_rag.ingestor_server.nvingest.Ingestor')
-    def test_get_nv_ingest_ingestor_with_images_enabled(self, mock_ingestor_class,
-                                                      mock_sanitize_url, mock_get_env,
-                                                      mock_get_config):
+    @patch("nvidia_rag.utils.common.get_config")
+    @patch("nvidia_rag.ingestor_server.nvingest.get_env_variable")
+    @patch("nvidia_rag.ingestor_server.nvingest.sanitize_nim_url")
+    @patch("nvidia_rag.ingestor_server.nvingest.Ingestor")
+    def test_get_nv_ingest_ingestor_with_images_enabled(
+        self, mock_ingestor_class, mock_sanitize_url, mock_get_env, mock_get_config
+    ):
         """Test get_nv_ingest_ingestor with image extraction enabled"""
         mock_config = self._create_mock_config()
         mock_config.nv_ingest.extract_images = True
@@ -165,9 +160,7 @@ class TestGetNvIngestIngestor:
         mock_ingestor_instance.vdb_upload.return_value = mock_ingestor_instance
 
         result = get_nv_ingest_ingestor(
-            self.mock_client,
-            self.filepaths,
-            vdb_op=self.mock_vdb_op
+            self.mock_client, self.filepaths, vdb_op=self.mock_vdb_op
         )
 
         assert result == mock_ingestor_instance
@@ -175,16 +168,16 @@ class TestGetNvIngestIngestor:
         mock_ingestor_instance.caption.assert_called_once_with(
             api_key="test_api_key",
             endpoint_url="http://test-caption-url",
-            model_name="test-caption-model"
+            model_name="test-caption-model",
         )
 
-    @patch('nvidia_rag.ingestor_server.nvingest.get_config')
-    @patch('nvidia_rag.ingestor_server.nvingest.get_env_variable')
-    @patch('nvidia_rag.ingestor_server.nvingest.sanitize_nim_url')
-    @patch('nvidia_rag.ingestor_server.nvingest.Ingestor')
-    def test_get_nv_ingest_ingestor_with_structured_elements_modality(self, mock_ingestor_class,
-                                                                    mock_sanitize_url, mock_get_env,
-                                                                    mock_get_config):
+    @patch("nvidia_rag.utils.common.get_config")
+    @patch("nvidia_rag.ingestor_server.nvingest.get_env_variable")
+    @patch("nvidia_rag.ingestor_server.nvingest.sanitize_nim_url")
+    @patch("nvidia_rag.ingestor_server.nvingest.Ingestor")
+    def test_get_nv_ingest_ingestor_with_structured_elements_modality(
+        self, mock_ingestor_class, mock_sanitize_url, mock_get_env, mock_get_config
+    ):
         """Test get_nv_ingest_ingestor with structured elements modality"""
         mock_config = self._create_mock_config()
         mock_config.nv_ingest.structured_elements_modality = "test_modality"
@@ -201,9 +194,7 @@ class TestGetNvIngestIngestor:
         mock_ingestor_instance.vdb_upload.return_value = mock_ingestor_instance
 
         result = get_nv_ingest_ingestor(
-            self.mock_client,
-            self.filepaths,
-            vdb_op=self.mock_vdb_op
+            self.mock_client, self.filepaths, vdb_op=self.mock_vdb_op
         )
 
         assert result == mock_ingestor_instance
@@ -212,13 +203,13 @@ class TestGetNvIngestIngestor:
         call_args = mock_ingestor_instance.embed.call_args
         assert call_args[1]["structured_elements_modality"] == "test_modality"
 
-    @patch('nvidia_rag.ingestor_server.nvingest.get_config')
-    @patch('nvidia_rag.ingestor_server.nvingest.get_env_variable')
-    @patch('nvidia_rag.ingestor_server.nvingest.sanitize_nim_url')
-    @patch('nvidia_rag.ingestor_server.nvingest.Ingestor')
-    def test_get_nv_ingest_ingestor_with_image_elements_modality(self, mock_ingestor_class,
-                                                               mock_sanitize_url, mock_get_env,
-                                                               mock_get_config):
+    @patch("nvidia_rag.utils.common.get_config")
+    @patch("nvidia_rag.ingestor_server.nvingest.get_env_variable")
+    @patch("nvidia_rag.ingestor_server.nvingest.sanitize_nim_url")
+    @patch("nvidia_rag.ingestor_server.nvingest.Ingestor")
+    def test_get_nv_ingest_ingestor_with_image_elements_modality(
+        self, mock_ingestor_class, mock_sanitize_url, mock_get_env, mock_get_config
+    ):
         """Test get_nv_ingest_ingestor with image elements modality"""
         mock_config = self._create_mock_config()
         mock_config.nv_ingest.image_elements_modality = "test_image_modality"
@@ -235,9 +226,7 @@ class TestGetNvIngestIngestor:
         mock_ingestor_instance.vdb_upload.return_value = mock_ingestor_instance
 
         result = get_nv_ingest_ingestor(
-            self.mock_client,
-            self.filepaths,
-            vdb_op=self.mock_vdb_op
+            self.mock_client, self.filepaths, vdb_op=self.mock_vdb_op
         )
 
         assert result == mock_ingestor_instance
@@ -246,14 +235,19 @@ class TestGetNvIngestIngestor:
         call_args = mock_ingestor_instance.embed.call_args
         assert call_args[1]["image_elements_modality"] == "test_image_modality"
 
-    @patch('nvidia_rag.ingestor_server.nvingest.get_config')
-    @patch('nvidia_rag.ingestor_server.nvingest.get_env_variable')
-    @patch('nvidia_rag.ingestor_server.nvingest.sanitize_nim_url')
-    @patch('nvidia_rag.ingestor_server.nvingest.Ingestor')
-    @patch('nvidia_rag.ingestor_server.nvingest.os.makedirs')
-    def test_get_nv_ingest_ingestor_with_save_to_disk(self, mock_makedirs, mock_ingestor_class,
-                                                    mock_sanitize_url, mock_get_env,
-                                                    mock_get_config):
+    @patch("nvidia_rag.utils.common.get_config")
+    @patch("nvidia_rag.ingestor_server.nvingest.get_env_variable")
+    @patch("nvidia_rag.ingestor_server.nvingest.sanitize_nim_url")
+    @patch("nvidia_rag.ingestor_server.nvingest.Ingestor")
+    @patch("nvidia_rag.ingestor_server.nvingest.os.makedirs")
+    def test_get_nv_ingest_ingestor_with_save_to_disk(
+        self,
+        mock_makedirs,
+        mock_ingestor_class,
+        mock_sanitize_url,
+        mock_get_env,
+        mock_get_config,
+    ):
         """Test get_nv_ingest_ingestor with save_to_disk enabled"""
         mock_config = self._create_mock_config()
         mock_config.nv_ingest.save_to_disk = True
@@ -272,25 +266,32 @@ class TestGetNvIngestIngestor:
             mock_ingestor_instance.vdb_upload.return_value = mock_ingestor_instance
 
             result = get_nv_ingest_ingestor(
-                self.mock_client,
-                self.filepaths,
-                vdb_op=self.mock_vdb_op
+                self.mock_client, self.filepaths, vdb_op=self.mock_vdb_op
             )
 
             assert result == mock_ingestor_instance
             # Verify save_to_disk was called
             mock_ingestor_instance.save_to_disk.assert_called_once()
             call_args = mock_ingestor_instance.save_to_disk.call_args
-            assert call_args[1]["output_directory"] == "/test/data/nv-ingest-results/test_collection"
+            assert (
+                call_args[1]["output_directory"]
+                == "/test/data/nv-ingest-results/test_collection"
+            )
             assert call_args[1]["cleanup"] is False
+            # Verify os.makedirs was called with expected path
+            mock_makedirs.assert_called_once_with(
+                "/test/data/nv-ingest-results/test_collection", exist_ok=True
+            )
 
-    @patch('nvidia_rag.ingestor_server.nvingest.get_config')
+    @patch("nvidia_rag.utils.common.get_config")
     def test_get_nv_ingest_ingestor_config_error(self, mock_get_config):
         """Test get_nv_ingest_ingestor handles config errors"""
         mock_get_config.side_effect = Exception("Config error")
 
         with pytest.raises(Exception, match="Config error"):
-            get_nv_ingest_ingestor(self.mock_client, self.filepaths, vdb_op=self.mock_vdb_op)
+            get_nv_ingest_ingestor(
+                self.mock_client, self.filepaths, vdb_op=self.mock_vdb_op
+            )
 
     def test_enable_nv_ingest_vdb_upload_constant(self):
         """Test ENABLE_NV_INGEST_VDB_UPLOAD constant"""

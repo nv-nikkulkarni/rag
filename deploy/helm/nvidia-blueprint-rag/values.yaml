@@ -37,8 +37,8 @@ ngcApiSecret:
 
 # -- RAG server container image
 image:
-  repository: nvcr.io/nvidia/blueprint/rag-server
-  tag: "2.3.0"
+  repository: nvcr.io/0648981100760671/rag-server
+  tag: "latest"
   pullPolicy: Always
 
 # -- RAG server service configuration
@@ -85,11 +85,6 @@ envVars:
   PROMPT_CONFIG_FILE: "/prompt.yaml"
   PROMETHEUS_MULTIPROC_DIR: "/tmp-data/prom_data"
 
-  ##===Authentication===
-  # Set LLM_API_KEY if non-NVIDIA hosted LLM API endpoint is being used
-  # If not set, NVIDIA_API_KEY will be used as fallback
-  LLM_API_KEY: ""
-
   ##===MINIO specific configurations used to store multimodal base64 content===
   MINIO_ENDPOINT: "rag-minio:9000"
   MINIO_ACCESSKEY: "minioadmin"
@@ -108,6 +103,15 @@ envVars:
   APP_VECTORSTORE_ENABLEGPUSEARCH: "True"
   # ef: Parameter controlling query time/accuracy trade-off. Higher ef leads to more accurate but slower search.
   APP_VECTORSTORE_EF: "100"
+  # Username for vector store authentication
+  APP_VECTORSTORE_USERNAME: ""
+  # Password for vector store authentication
+  APP_VECTORSTORE_PASSWORD: ""
+  # Elasticsearch API key auth (optional). Prefer these over username/password when set.
+  # Provide either base64 APP_VECTORSTORE_APIKEY or split ID/SECRET.
+  APP_VECTORSTORE_APIKEY_ID: ""
+  APP_VECTORSTORE_APIKEY_SECRET: ""
+  APP_VECTORSTORE_APIKEY: ""
 
   # vectorstore collection name to store embeddings
   COLLECTION_NAME: "multimodal_data"
@@ -142,6 +146,7 @@ envVars:
   # URL on which embedding model is hosted. If "", Nvidia hosted API is used
   APP_EMBEDDINGS_SERVERURL: "nemoretriever-embedding-ms:8000"
   APP_EMBEDDINGS_MODELNAME: "nvidia/llama-3.2-nv-embedqa-1b-v2"
+  APP_EMBEDDINGS_DIMENSIONS: "2048"
 
   ##===Reranking Model specific configurations===
   # URL on which ranking model is hosted. If "", Nvidia hosted API is used
@@ -242,8 +247,8 @@ ingestor-server:
     password: ""
 
   image:
-    repository: nvcr.io/nvidia/blueprint/ingestor-server
-    tag: "2.3.0"
+    repository: nvcr.io/0648981100760671/ingestor-server
+    tag: "latest"
     pullPolicy: Always
 
   # -- Service config for ingestor-server
@@ -275,17 +280,21 @@ ingestor-server:
     APP_VECTORSTORE_SEARCHTYPE: "dense"
     APP_VECTORSTORE_ENABLEGPUINDEX: "True"
     APP_VECTORSTORE_ENABLEGPUSEARCH: "True"
+    # Username  for vector store authentication
+    APP_VECTORSTORE_USERNAME: ""
+    # Password for vector store authentication
+    APP_VECTORSTORE_PASSWORD: ""
+    # Elasticsearch API key auth (optional). Prefer these over username/password when set.
+    # Provide either base64 APP_VECTORSTORE_APIKEY or split ID/SECRET.
+    APP_VECTORSTORE_APIKEY_ID: ""
+    APP_VECTORSTORE_APIKEY_SECRET: ""
+    APP_VECTORSTORE_APIKEY: ""
     COLLECTION_NAME: "multimodal_data"
 
     # === MinIO Configurations ===
     MINIO_ENDPOINT: "rag-minio:9000"
     MINIO_ACCESSKEY: "minioadmin"
     MINIO_SECRETKEY: "minioadmin"
-
-    # === Authentication ===
-    # Set LLM_API_KEY if non-NVIDIA hosted LLM API endpoint is being used
-    # If not set, NVIDIA_API_KEY will be used as fallback
-    LLM_API_KEY: ""
 
     # === Embeddings Configurations ===
     APP_EMBEDDINGS_SERVERURL: "nemoretriever-embedding-ms:8000"
@@ -322,6 +331,8 @@ ingestor-server:
     SUMMARY_LLM_SERVERURL: "nim-llm:8000"
     SUMMARY_LLM_MAX_CHUNK_LENGTH: "50000"
     SUMMARY_CHUNK_OVERLAP: "200"
+    SUMMARY_LLM_TEMPERATURE: "0.0"
+    SUMMARY_LLM_TOP_P: "1.0"
 
     # === General ===
     ENABLE_CITATIONS: "True"
@@ -375,9 +386,9 @@ frontend:
   replicaCount: 1
 
   image:
-    repository: nvcr.io/nvidia/blueprint/rag-frontend
+    repository: nvcr.io/0648981100760671/rag-frontend
     pullPolicy: IfNotPresent
-    tag: "2.3.0"
+    tag: "latest"
 
   imagePullSecret:
     name: "ngc-secret"
@@ -412,6 +423,9 @@ elasticsearch:
     enabled: false
     tls:
       restEncryption: false
+  # xpack:
+  #   security:
+  #     enabled: true
   extraConfig:
     discovery.type: single-node
   master:
@@ -662,8 +676,8 @@ nv-ingest:
   ngcImagePullSecret:
     create: false
   image:
-    repository: "nvcr.io/nvidia/nemo-microservices/nv-ingest"
-    tag: "25.9.0"
+    repository: "nvcr.io/0648981100760671/nv-ingest"
+    tag: "2025.11.11"
   resources:
     limits:
       nvidia.com/gpu: 0
@@ -745,6 +759,15 @@ nv-ingest:
       resources:
         limits:
           nvidia.com/gpu: 1
+      # [Uncomment this below section if you want to use the authentication enabled Milvus config]
+      # extraVolumes:
+      #   - name: milvus-config
+      #     configMap:
+      #       name: milvus-config
+      # extraVolumeMounts:
+      #   - name: milvus-config
+      #     mountPath: /milvus/configs/milvus.yaml
+      #     subPath: milvus.yaml
     minio:
       image:
         repository: minio/minio

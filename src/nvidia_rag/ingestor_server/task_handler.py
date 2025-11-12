@@ -18,7 +18,7 @@ Module for handling ingestion tasks.
 This module is responsible for handling ingestion tasks.
 It is used to submit tasks to the task handler and get the status and result of tasks.
 1. IngestionTaskHandler: A class that handles ingestion tasks.
-2. RedisSchema: A class that defines the schema of the Redis database.
+2. IngestionTaskStateSchema: A class that defines the schema of the Redis database.
 3. submit_task: A method that submits a task to the task handler.
 4. get_task_status: A method that gets the status of a task.
 5. update_task_status: A method that updates the status of a task.
@@ -38,9 +38,9 @@ from redis import Redis
 logger = logging.getLogger(__name__)
 
 
-class RedisSchema(BaseModel):
+class IngestionTaskStateSchema(BaseModel):
     """
-    A class that defines the schema of the Redis database.
+    A class that defines the schema of the ingestion task state.
     """
 
     task_id: str
@@ -62,6 +62,9 @@ class IngestionTaskHandler:
         "ENABLE_REDIS_BACKEND", "False"
     ).lower() in ["true", "True"]
 
+    # Asyncio lock to synchronize access to the task map
+    _asyncio_lock = asyncio.Lock()
+
     if _enable_redis_backend:
         logger.info(
             f"Initializing Redis client with host {_redis_host}, port {_redis_port}, db {_redis_db}"
@@ -75,6 +78,7 @@ class IngestionTaskHandler:
     def __init__(self):
         # Local task map to store tasks
         self.task_map = {}  # {task_id: asyncio_task}
+        self.task_status_result_map = {}  # {task_id: (status, result)}
 
     async def _execute_ingestion_task(self, task_id: str, function: Callable):
         """
@@ -86,17 +90,19 @@ class IngestionTaskHandler:
         try:
             result = await function()
             logger.info(f"Task {task_id} completed using IngestionTaskHandler")
-            self._set_task_result(task_id, result)
+            await self.set_task_status_and_result(task_id, "FINISHED", result)
             return result
         except Exception as e:
-            self.update_task_status(task_id, "FAILED")
+            await self.set_task_status_and_result(
+                task_id, "FAILED", {"message": str(e)}
+            )
             logger.error(
                 f"Task {task_id} failed using IngestionTaskHandler with error: {e}",
                 exc_info=logger.getEffectiveLevel() <= logging.DEBUG,
             )
             raise e
 
-    def submit_task(self, function: Callable):
+    async def submit_task(self, function: Callable, task_id: str = None):
         """
         Submit a task to the task handler.
         Args:
@@ -104,56 +110,78 @@ class IngestionTaskHandler:
         Returns:
             task_id: The id of the task.
         """
-        task_id = str(uuid4())
+        if task_id is None:
+            task_id = str(uuid4())
         asyncio_task = asyncio.create_task(
             self._execute_ingestion_task(task_id, function)
         )
         self.task_map[task_id] = asyncio_task
         if self._enable_redis_backend:
             self._redis_client.json().set(
-                task_id, "$", RedisSchema(task_id=task_id, state="PENDING").model_dump()
+                task_id,
+                "$",
+                IngestionTaskStateSchema(task_id=task_id, state="PENDING").model_dump(),
             )
+        else:
+            async with self._asyncio_lock:
+                self.task_status_result_map[task_id] = IngestionTaskStateSchema(
+                    task_id=task_id, state="PENDING"
+                ).model_dump()
         return task_id
 
-    def get_task_status(self, task_id: str):
+    def get_task_state(self, task_id: str):
         """
-        Get the status of a task.
+        Get the state of a task.
         Args:
             task_id: The id of the task.
         Returns:
-            status: The status of the task.
+            state: The state of the task.
         """
         if self._enable_redis_backend:
             return self._redis_client.json().get(task_id).get("state")
-        return self.task_map[task_id]._state
+        return self.task_status_result_map[task_id].get("state")
 
-    def update_task_status(self, task_id: str, status: str):
+    async def set_task_status_and_result(
+        self, task_id: str, status: str, result: dict[str, Any]
+    ) -> None:
         """
-        Optional function to update the status of a task in Redis and the task map.
+        Set the status and result of a task in Redis and the task map.
         Args:
             task_id: The id of the task.
             status: The status of the task.
-        """
-        if self._enable_redis_backend:
-            self._redis_client.json().set(
-                task_id, "$", RedisSchema(task_id=task_id, state=status).model_dump()
-            )
-
-    def _set_task_result(self, task_id: str, result: dict[str, Any]):
-        """
-        Internal function to set the result of a task in Redis.
-        Args:
-            task_id: The id of the task.
             result: The result of the task.
         """
         if self._enable_redis_backend:
             self._redis_client.json().set(
                 task_id,
                 "$",
-                RedisSchema(
-                    task_id=task_id, state="FINISHED", result=result
+                IngestionTaskStateSchema(
+                    task_id=task_id, state=status, result=result
                 ).model_dump(),
             )
+        else:
+            async with self._asyncio_lock:
+                self.task_status_result_map[task_id] = IngestionTaskStateSchema(
+                    task_id=task_id, state=status, result=result
+                ).model_dump()
+                logger.debug(f"Task status result map: {self.task_status_result_map}")
+        logger.info(f"Task {task_id} status set to {status} and result: {result}")
+
+    def get_task_status_and_result(self, task_id: str):
+        """
+        Get the status and result of a task from Redis and the task map.
+        Args:
+            task_id: The id of the task.
+        Returns:
+            status: The status of the task.
+            result: The result of the task.
+        """
+        logger.info(
+            f"Getting result of task {task_id}, enable_redis_backend: {self._enable_redis_backend}"
+        )
+        if self._enable_redis_backend:
+            return self._redis_client.json().get(task_id)
+        return self.task_status_result_map[task_id]
 
     def get_task_result(self, task_id: str):
         """
@@ -168,8 +196,10 @@ class IngestionTaskHandler:
         )
         if self._enable_redis_backend:
             return self._redis_client.json().get(task_id).get("result")
-        logger.info(f"Task result: {self.task_map[task_id].result()}")
-        return self.task_map[task_id].result()
+        logger.info(
+            f"Task result: {self.task_status_result_map[task_id].get('result')}"
+        )
+        return self.task_status_result_map[task_id].get("result")
 
 
 # Create a singleton instance of the IngestionTaskHandler

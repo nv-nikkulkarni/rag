@@ -4491,15 +4491,15 @@ class TestFilterValidator:
                 "expected_processed": 'not array_contains(content_metadata["tags"], "important")',
                 "description": "Single value not in for tags field",
             },
-            # Case insensitive tests
+            # Case insensitive tests (values should be lowercased for case-insensitive matching)
             {
                 "filter": '"URGENT" not in content_metadata["tags"]',
-                "expected_processed": 'not array_contains(content_metadata["tags"], "URGENT")',
+                "expected_processed": 'not array_contains(content_metadata["tags"], "urgent")',
                 "description": "Case insensitive single value not in",
             },
             {
                 "filter": '"IMPORTANT" not in content_metadata["tags"]',
-                "expected_processed": 'not array_contains(content_metadata["tags"], "IMPORTANT")',
+                "expected_processed": 'not array_contains(content_metadata["tags"], "important")',
                 "description": "Case insensitive single value not in for tags",
             },
             # Numeric value tests
@@ -4747,7 +4747,7 @@ class TestFilterValidator:
                     True,
                 ),
                 (
-                    'array_contains(content_metadata["array_string_field"], ["test"])',
+                    'array_contains(content_metadata["array_string_field"], "test")',
                     True,
                 ),
                 (
@@ -5026,6 +5026,328 @@ class TestFilterValidator:
             'content_metadata["title"] == "test" and content_metadata["pages"] == 2015 and content_metadata["rating"] == 4.5 and content_metadata["is_public"] == true'
         )
         assert result["status"] is True
+
+    def test_array_function_parameter_type_validation(self, mock_config, array_schema):
+        """Test comprehensive parameter type validation for array functions.
+
+        This test validates the new functionality added to ensure:
+        - array_contains() only accepts scalar values (not arrays)
+        - array_contains_all() only accepts array values (not scalars)
+        - array_contains_any() only accepts array values (not scalars)
+        - array_length() is not affected by the new validation
+        """
+        parser = FilterExpressionParser(array_schema, mock_config)
+
+        # Test array_contains with different value types
+        # Should pass: scalar string value
+        result = parser.validate_filter_expression(
+            'array_contains(content_metadata["tags"], "urgent")'
+        )
+        assert result["status"] is True
+        assert "error_message" not in result
+
+        # Should pass: scalar integer value
+        result = parser.validate_filter_expression(
+            'array_contains(content_metadata["ids"], 42)'
+        )
+        assert result["status"] is True
+        assert "error_message" not in result
+
+        # Should pass: scalar float value
+        result = parser.validate_filter_expression(
+            'array_contains(content_metadata["scores"], 5.5)'
+        )
+        assert result["status"] is True
+        assert "error_message" not in result
+
+        # Should fail: array value instead of scalar
+        result = parser.validate_filter_expression(
+            'array_contains(content_metadata["tags"], ["urgent"])'
+        )
+        assert result["status"] is False
+        assert "error_message" in result
+        assert "array_contains() expects a scalar value" in result["error_message"]
+        assert "Use array_contains_all()" in result["error_message"]
+
+        # Should fail: array of integers
+        result = parser.validate_filter_expression(
+            'array_contains(content_metadata["ids"], [42])'
+        )
+        assert result["status"] is False
+        assert "array_contains() expects a scalar value" in result["error_message"]
+
+        # Should fail: array of floats
+        result = parser.validate_filter_expression(
+            'array_contains(content_metadata["scores"], [5.5])'
+        )
+        assert result["status"] is False
+        assert "array_contains() expects a scalar value" in result["error_message"]
+
+        # Test array_contains_all with different value types
+        # Should pass: array of strings
+        result = parser.validate_filter_expression(
+            'array_contains_all(content_metadata["tags"], ["urgent", "important"])'
+        )
+        assert result["status"] is True
+        assert "error_message" not in result
+
+        # Should pass: array of integers
+        result = parser.validate_filter_expression(
+            'array_contains_all(content_metadata["ids"], [1, 2, 3])'
+        )
+        assert result["status"] is True
+        assert "error_message" not in result
+
+        # Should pass: array of floats
+        result = parser.validate_filter_expression(
+            'array_contains_all(content_metadata["scores"], [1.5, 2.5, 3.5])'
+        )
+        assert result["status"] is True
+        assert "error_message" not in result
+
+        # Should fail: scalar string value
+        result = parser.validate_filter_expression(
+            'array_contains_all(content_metadata["tags"], "urgent")'
+        )
+        assert result["status"] is False
+        assert "error_message" in result
+        assert "array_contains_all() expects an array value" in result["error_message"]
+        assert "Use array_contains()" in result["error_message"]
+
+        # Should fail: scalar integer value
+        result = parser.validate_filter_expression(
+            'array_contains_all(content_metadata["ids"], 42)'
+        )
+        assert result["status"] is False
+        assert "array_contains_all() expects an array value" in result["error_message"]
+
+        # Should fail: scalar float value
+        result = parser.validate_filter_expression(
+            'array_contains_all(content_metadata["scores"], 5.5)'
+        )
+        assert result["status"] is False
+        assert "array_contains_all() expects an array value" in result["error_message"]
+
+        # Test array_contains_any with different value types
+        # Should pass: array of strings
+        result = parser.validate_filter_expression(
+            'array_contains_any(content_metadata["tags"], ["urgent", "important"])'
+        )
+        assert result["status"] is True
+        assert "error_message" not in result
+
+        # Should pass: array of floats
+        result = parser.validate_filter_expression(
+            'array_contains_any(content_metadata["scores"], [1.5, 2.5])'
+        )
+        assert result["status"] is True
+        assert "error_message" not in result
+
+        # Should pass: array of integers
+        result = parser.validate_filter_expression(
+            'array_contains_any(content_metadata["ids"], [10, 20, 30])'
+        )
+        assert result["status"] is True
+        assert "error_message" not in result
+
+        # Should fail: scalar string value
+        result = parser.validate_filter_expression(
+            'array_contains_any(content_metadata["tags"], "urgent")'
+        )
+        assert result["status"] is False
+        assert "error_message" in result
+        assert "array_contains_any() expects an array value" in result["error_message"]
+        assert "Use array_contains()" in result["error_message"]
+
+        # Should fail: scalar float value
+        result = parser.validate_filter_expression(
+            'array_contains_any(content_metadata["scores"], 5.5)'
+        )
+        assert result["status"] is False
+        assert "array_contains_any() expects an array value" in result["error_message"]
+
+        # Should fail: scalar integer value
+        result = parser.validate_filter_expression(
+            'array_contains_any(content_metadata["ids"], 42)'
+        )
+        assert result["status"] is False
+        assert "array_contains_any() expects an array value" in result["error_message"]
+
+        # Test that array_length is not affected by the new validation
+        result = parser.validate_filter_expression(
+            'array_length(content_metadata["tags"]) > 0'
+        )
+        assert result["status"] is True
+        assert "error_message" not in result
+
+        result = parser.validate_filter_expression(
+            'array_length(content_metadata["ids"]) >= 5'
+        )
+        assert result["status"] is True
+        assert "error_message" not in result
+
+
+class TestCaseInsensitiveArrayMatching:
+    """Test case-insensitive string array matching validation"""
+
+    @pytest.fixture
+    def string_array_schema(self):
+        """Create a schema with string array fields."""
+        return MetadataSchema(
+            schema=[
+                MetadataField(
+                    name="tags", type="array", array_type="string", required=False
+                ),
+                MetadataField(
+                    name="regions", type="array", array_type="string", required=False
+                ),
+                MetadataField(
+                    name="categories", type="array", array_type="string", required=False
+                ),
+                MetadataField(
+                    name="ids", type="array", array_type="integer", required=False
+                ),
+                MetadataField(
+                    name="scores", type="array", array_type="float", required=False
+                ),
+            ]
+        )
+
+    @pytest.fixture
+    def mock_config(self):
+        """Create a metadata configuration object."""
+        return MetadataConfig()
+
+    def test_array_contains_with_string_values(self, mock_config, string_array_schema):
+        """Test that array_contains validates correctly for string arrays"""
+        parser = FilterExpressionParser(string_array_schema, mock_config)
+
+        # Validate expression with uppercase string
+        result = parser.validate_filter_expression(
+            'array_contains(content_metadata["tags"], "AI")'
+        )
+        assert result["status"] is True
+        assert "error_message" not in result
+
+        # Validate expression with mixed case
+        result = parser.validate_filter_expression(
+            'array_contains(content_metadata["tags"], "Machine Learning")'
+        )
+        assert result["status"] is True
+        assert "error_message" not in result
+
+    def test_array_contains_any_with_string_values(
+        self, mock_config, string_array_schema
+    ):
+        """Test that array_contains_any validates correctly for string arrays"""
+        parser = FilterExpressionParser(string_array_schema, mock_config)
+
+        # Validate expression with uppercase strings
+        result = parser.validate_filter_expression(
+            'array_contains_any(content_metadata["regions"], ["EMEA", "APAC"])'
+        )
+        assert result["status"] is True
+        assert "error_message" not in result
+
+        # Validate expression with mixed case
+        result = parser.validate_filter_expression(
+            'array_contains_any(content_metadata["categories"], ["Technology", "Science"])'
+        )
+        assert result["status"] is True
+        assert "error_message" not in result
+
+    def test_array_contains_all_with_string_values(
+        self, mock_config, string_array_schema
+    ):
+        """Test that array_contains_all validates correctly for string arrays"""
+        parser = FilterExpressionParser(string_array_schema, mock_config)
+
+        # Validate expression with uppercase strings
+        result = parser.validate_filter_expression(
+            'array_contains_all(content_metadata["categories"], ["Tech", "Review"])'
+        )
+        assert result["status"] is True
+        assert "error_message" not in result
+
+        # Validate expression with multiple mixed-case strings
+        result = parser.validate_filter_expression(
+            'array_contains_all(content_metadata["tags"], ["Important", "Urgent", "Critical"])'
+        )
+        assert result["status"] is True
+        assert "error_message" not in result
+
+    def test_array_operations_with_integer_arrays(
+        self, mock_config, string_array_schema
+    ):
+        """Test that non-string arrays validate correctly"""
+        parser = FilterExpressionParser(string_array_schema, mock_config)
+
+        # Integer arrays should work correctly
+        result = parser.validate_filter_expression(
+            'array_contains(content_metadata["ids"], 123)'
+        )
+        assert result["status"] is True
+        assert "error_message" not in result
+
+        result = parser.validate_filter_expression(
+            'array_contains_any(content_metadata["ids"], [1, 2, 3])'
+        )
+        assert result["status"] is True
+        assert "error_message" not in result
+
+    def test_array_operations_with_float_arrays(self, mock_config, string_array_schema):
+        """Test that float arrays validate correctly"""
+        parser = FilterExpressionParser(string_array_schema, mock_config)
+
+        # Float arrays should work correctly
+        result = parser.validate_filter_expression(
+            'array_contains(content_metadata["scores"], 4.5)'
+        )
+        assert result["status"] is True
+        assert "error_message" not in result
+
+        result = parser.validate_filter_expression(
+            'array_contains_all(content_metadata["scores"], [4.5, 3.2, 5.0])'
+        )
+        assert result["status"] is True
+        assert "error_message" not in result
+
+    def test_in_operator_with_string_arrays(self, mock_config, string_array_schema):
+        """Test that IN operator validates correctly on string arrays"""
+        parser = FilterExpressionParser(string_array_schema, mock_config)
+
+        # Validate expression with IN operator and mixed-case strings
+        result = parser.validate_filter_expression(
+            'content_metadata["tags"] in ["Important", "Urgent"]'
+        )
+        assert result["status"] is True
+        assert "error_message" not in result
+
+        result = parser.validate_filter_expression(
+            'content_metadata["regions"] in ["NORTH_AMERICA", "EUROPE", "ASIA"]'
+        )
+        assert result["status"] is True
+        assert "error_message" not in result
+
+    def test_complex_array_expressions_with_mixed_case(
+        self, mock_config, string_array_schema
+    ):
+        """Test complex expressions with mixed-case string arrays"""
+        parser = FilterExpressionParser(string_array_schema, mock_config)
+
+        # Complex AND expression
+        result = parser.validate_filter_expression(
+            'array_contains(content_metadata["tags"], "AI") and array_contains(content_metadata["regions"], "EMEA")'
+        )
+        assert result["status"] is True
+        assert "error_message" not in result
+
+        # Complex OR expression
+        result = parser.validate_filter_expression(
+            'array_contains_any(content_metadata["categories"], ["Tech", "Science"]) or array_length(content_metadata["tags"]) > 2'
+        )
+        assert result["status"] is True
+        assert "error_message" not in result
 
 
 if __name__ == "__main__":

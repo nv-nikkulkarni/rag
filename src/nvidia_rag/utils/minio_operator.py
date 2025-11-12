@@ -19,6 +19,8 @@
 3. get_unique_thumbnail_id_collection_prefix: Get the unique thumbnail id collection prefix.
 4. get_unique_thumbnail_id_file_name_prefix: Get the unique thumbnail id file name prefix.
 5. get_unique_thumbnail_id: Get the unique thumbnail id.
+6. extract_location_from_metadata: Extract location from metadata based on document type.
+7. get_unique_thumbnail_id_from_result: Generate unique thumbnail ID from nv-ingest result element.
 """
 
 import json
@@ -28,10 +30,10 @@ from io import BytesIO
 from minio import Minio
 from minio.commonconfig import SnowballObject
 
-from nvidia_rag.utils.common import get_config
+from nvidia_rag.utils.common import ConfigProxy
 
 logger = logging.getLogger(__name__)
-CONFIG = get_config()
+CONFIG = ConfigProxy()
 DEFAULT_BUCKET_NAME = "default-bucket"
 
 
@@ -182,3 +184,123 @@ def get_unique_thumbnail_id(
     # Create a string representation
     unique_thumbnail_id = f"{prefix}_{page_number}_" + "_".join(map(str, rounded_bbox))
     return unique_thumbnail_id
+
+
+def extract_location_from_metadata(
+    document_type: str,
+    metadata: dict,
+) -> list[float] | None:
+    """
+    Extract location (bounding box) from metadata based on document type.
+
+    This function handles the complexity of finding location information
+    across different document types and their respective metadata structures.
+
+    Args:
+        document_type: Type of document ("image", "structured", etc.)
+        metadata: The metadata dictionary (can be from nv-ingest or VDB)
+
+    Returns:
+        Location as [x1, y1, x2, y2] list or None if not found
+
+    Supported document types:
+        - "image": Extracts from image_metadata.image_location or content_metadata.location
+        - "structured": Extracts from table_metadata.table_location or content_metadata.location
+                       (works for both tables and charts)
+    """
+    # First check if location is in content_metadata (VDB format)
+    content_metadata_dict = metadata.get("content_metadata", {})
+    location = content_metadata_dict.get("location") if content_metadata_dict else None
+
+    # If not found in content_metadata, extract from document-type-specific metadata (nv-ingest format)
+    if location is None:
+        # Extract location from image_metadata, table_metadata, and chart_metadata
+        image_metadata = metadata.get("image_metadata", {}) or {}
+        table_metadata = metadata.get("table_metadata", {}) or {}
+        chart_metadata = metadata.get("chart_metadata", {}) or {}
+
+        location = (
+            image_metadata.get("image_location", [])
+            + table_metadata.get("table_location", [])
+            + chart_metadata.get("chart_location", [])
+        )
+
+        if location:
+            logger.info("Extracted location is %s", location)
+
+    return location
+
+
+def get_unique_thumbnail_id_from_result(
+    collection_name: str,
+    file_name: str,
+    page_number: int,
+    location: list[float] | None = None,
+    metadata: dict | None = None,
+) -> str | None:
+    """
+    Generate unique thumbnail ID with fallback to metadata if location is not provided.
+
+    This function tries to use the provided location first. If location is None,
+    it will attempt to extract location from metadata based on document type.
+
+    Args:
+        collection_name: Name of the collection
+        file_name: Name of the file
+        page_number: Page number
+        location: Bounding box location [x1, y1, x2, y2] (optional)
+        metadata: Content metadata dict containing image_metadata or table_metadata (optional)
+
+    Returns:
+        Unique thumbnail ID string or None if location cannot be extracted
+
+    Examples:
+        # With location already extracted
+        thumbnail_id = get_unique_thumbnail_id_from_result(
+            collection_name="my_collection",
+            file_name="doc.pdf",
+            page_number=0,
+            location=[35, 0, 575, 539]
+        )
+
+        # Without location, fallback to metadata
+        thumbnail_id = get_unique_thumbnail_id_from_result(
+            collection_name="my_collection",
+            file_name="doc.pdf",
+            page_number=0,
+            location=None,
+            metadata={}
+        )
+    """
+    try:
+        # If location is not provided, try to extract from metadata
+        if not location and metadata:
+            content_metadata = metadata.get("content_metadata", {})
+            document_type = content_metadata.get("type")
+            if document_type:
+                logger.debug(
+                    "Attempting to extract location from metadata for %s (type: %s)",
+                    file_name,
+                    document_type,
+                )
+                location = extract_location_from_metadata(document_type, metadata)
+
+        # If still no location, cannot generate thumbnail ID
+        if location is None:
+            logger.warning(
+                f"Skipping page {page_number} of {file_name}: "
+                f"No location information found"
+            )
+            return None
+
+        # Generate and return unique thumbnail ID
+        return get_unique_thumbnail_id(
+            collection_name=collection_name,
+            file_name=file_name,
+            page_number=page_number,
+            location=location,
+        )
+
+    except Exception as e:
+        logger.warning("Failed to generate thumbnail ID for %s: %s", file_name, str(e))
+        return None

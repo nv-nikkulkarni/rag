@@ -33,11 +33,12 @@ import aiohttp
 from elasticsearch import Elasticsearch
 from pymilvus import connections, utility
 
-from nvidia_rag.utils.common import get_config
+from nvidia_rag.utils.common import ConfigProxy
 from nvidia_rag.utils.minio_operator import MinioOperator
 from nvidia_rag.utils.vdb.vdb_base import VDBRag
 
 logger = logging.getLogger(__name__)
+CONFIG = ConfigProxy()
 
 
 async def check_service_health(
@@ -81,11 +82,7 @@ async def check_service_health(
         if not url.startswith(("http://", "https://")):
             url = "http://" + url
 
-        # Disable SSL verification for external endpoints
-        # This only affects health monitoring UI, not actual LLM API calls
-        connector = aiohttp.TCPConnector(ssl=False)
-
-        async with aiohttp.ClientSession(connector=connector) as session:
+        async with aiohttp.ClientSession() as session:
             request_kwargs = {
                 "timeout": aiohttp.ClientTimeout(total=timeout),
                 "headers": headers or {},
@@ -257,7 +254,6 @@ async def check_all_services_health(vdb_op: VDBRag) -> dict[str, list[dict[str, 
     Returns:
         Dictionary with service categories and their health status
     """
-    config = get_config()
 
     # Create tasks for different service types
     tasks = []
@@ -270,9 +266,9 @@ async def check_all_services_health(vdb_op: VDBRag) -> dict[str, list[dict[str, 
     }
 
     # MinIO health check
-    minio_endpoint = config.minio.endpoint
-    minio_access_key = config.minio.access_key
-    minio_secret_key = config.minio.secret_key
+    minio_endpoint = CONFIG.minio.endpoint
+    minio_access_key = CONFIG.minio.access_key
+    minio_secret_key = CONFIG.minio.secret_key
     if minio_endpoint:
         tasks.append(
             (
@@ -302,24 +298,24 @@ async def check_all_services_health(vdb_op: VDBRag) -> dict[str, list[dict[str, 
 
     # NV-Ingest service health check
     if (
-        config.nv_ingest.message_client_hostname
-        and config.nv_ingest.message_client_port
+        CONFIG.nv_ingest.message_client_hostname
+        and CONFIG.nv_ingest.message_client_port
     ):
         tasks.append(
             (
                 "processing",
                 check_nv_ingest_health(
-                    hostname=config.nv_ingest.message_client_hostname,
-                    port=config.nv_ingest.message_client_port,
+                    hostname=CONFIG.nv_ingest.message_client_hostname,
+                    port=CONFIG.nv_ingest.message_client_port,
                 ),
             )
         )
 
     # Embedding service health check
-    if config.embeddings.server_url and not is_nvidia_api_catalog_url(
-        config.embeddings.server_url
+    if CONFIG.embeddings.server_url and not is_nvidia_api_catalog_url(
+        CONFIG.embeddings.server_url
     ):
-        embed_url = config.embeddings.server_url
+        embed_url = CONFIG.embeddings.server_url
         if not embed_url.startswith(("http://", "https://")):
             embed_url = f"http://{embed_url}/v1/health/ready"
         else:
@@ -330,7 +326,7 @@ async def check_all_services_health(vdb_op: VDBRag) -> dict[str, list[dict[str, 
             result = await check_service_health(
                 url=embed_url, service_name="Embeddings"
             )
-            result["model"] = config.embeddings.model_name
+            result["model"] = CONFIG.embeddings.model_name
             return result
 
         tasks.append(("nim", check_embed_health()))
@@ -339,8 +335,8 @@ async def check_all_services_health(vdb_op: VDBRag) -> dict[str, list[dict[str, 
         results["nim"].append(
             {
                 "service": "Embeddings",
-                "model": config.embeddings.model_name,
-                "url": config.embeddings.server_url,
+                "model": CONFIG.embeddings.model_name,
+                "url": CONFIG.embeddings.server_url,
                 "status": "healthy",
                 "latency_ms": 0,
                 "message": "Using NVIDIA API Catalog",
@@ -348,10 +344,10 @@ async def check_all_services_health(vdb_op: VDBRag) -> dict[str, list[dict[str, 
         )
 
     # LLM service health check (for summary generation)
-    if config.summarizer.server_url and not is_nvidia_api_catalog_url(
-        config.summarizer.server_url
+    if CONFIG.summarizer.server_url and not is_nvidia_api_catalog_url(
+        CONFIG.summarizer.server_url
     ):
-        llm_url = config.summarizer.server_url
+        llm_url = CONFIG.summarizer.server_url
         if not llm_url.startswith(("http://", "https://")):
             llm_url = f"http://{llm_url}/v1/health/ready"
         else:
@@ -360,7 +356,7 @@ async def check_all_services_health(vdb_op: VDBRag) -> dict[str, list[dict[str, 
         # For local services, we need to create a custom result with model info
         async def check_summary_llm_health():
             result = await check_service_health(url=llm_url, service_name="Summary LLM")
-            result["model"] = config.summarizer.model_name
+            result["model"] = CONFIG.summarizer.model_name
             return result
 
         tasks.append(("nim", check_summary_llm_health()))
@@ -369,8 +365,8 @@ async def check_all_services_health(vdb_op: VDBRag) -> dict[str, list[dict[str, 
         results["nim"].append(
             {
                 "service": "Summary LLM",
-                "model": config.summarizer.model_name,
-                "url": config.summarizer.server_url,
+                "model": CONFIG.summarizer.model_name,
+                "url": CONFIG.summarizer.server_url,
                 "status": "healthy",
                 "latency_ms": 0,
                 "message": "Using NVIDIA API Catalog",
@@ -378,11 +374,11 @@ async def check_all_services_health(vdb_op: VDBRag) -> dict[str, list[dict[str, 
         )
 
     # Caption model health check (only when image extraction is enabled)
-    if config.nv_ingest.extract_images:
-        if config.nv_ingest.caption_endpoint_url and not is_nvidia_api_catalog_url(
-            config.nv_ingest.caption_endpoint_url
+    if CONFIG.nv_ingest.extract_images:
+        if CONFIG.nv_ingest.caption_endpoint_url and not is_nvidia_api_catalog_url(
+            CONFIG.nv_ingest.caption_endpoint_url
         ):
-            caption_url = config.nv_ingest.caption_endpoint_url
+            caption_url = CONFIG.nv_ingest.caption_endpoint_url
             if not caption_url.startswith(("http://", "https://")):
                 caption_url = f"http://{caption_url}/v1/health/ready"
             else:
@@ -399,7 +395,7 @@ async def check_all_services_health(vdb_op: VDBRag) -> dict[str, list[dict[str, 
                 result = await check_service_health(
                     url=caption_url, service_name="Caption Model"
                 )
-                result["model"] = config.nv_ingest.caption_model_name
+                result["model"] = CONFIG.nv_ingest.caption_model_name
                 return result
 
             tasks.append(("nim", check_caption_health()))
@@ -408,14 +404,14 @@ async def check_all_services_health(vdb_op: VDBRag) -> dict[str, list[dict[str, 
             results["nim"].append(
                 {
                     "service": "Caption Model",
-                    "model": config.nv_ingest.caption_model_name,
-                    "url": config.nv_ingest.caption_endpoint_url
-                    if config.nv_ingest.caption_endpoint_url
+                    "model": CONFIG.nv_ingest.caption_model_name,
+                    "url": CONFIG.nv_ingest.caption_endpoint_url
+                    if CONFIG.nv_ingest.caption_endpoint_url
                     else "Not configured",
                     "status": "healthy",
                     "latency_ms": 0,
                     "message": "Using NVIDIA API Catalog"
-                    if config.nv_ingest.caption_endpoint_url
+                    if CONFIG.nv_ingest.caption_endpoint_url
                     else "Using NVIDIA API Catalog (default)",
                 }
             )

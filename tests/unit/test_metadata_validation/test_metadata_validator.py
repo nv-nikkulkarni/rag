@@ -9,8 +9,10 @@ from datetime import datetime
 from unittest.mock import Mock
 
 import pytest
+
 from nvidia_rag.utils.configuration import MetadataConfig
 from nvidia_rag.utils.metadata_validation import (
+    SYSTEM_MANAGED_FIELDS,
     DatetimeUtility,
     MetadataConfigError,
     MetadataField,
@@ -37,108 +39,185 @@ class TestMetadataValidator:
     @pytest.fixture
     def array_schema(self):
         """Create a schema with array fields."""
-        return MetadataSchema(schema=[
-            MetadataField(name="tags", type="array", array_type="string", required=False),
-            MetadataField(name="scores", type="array", array_type="float", required=False),
-            MetadataField(name="ids", type="array", array_type="integer", required=False),
-            MetadataField(name="flags", type="array", array_type="boolean", required=False),
-            MetadataField(name="title", type="string", required=False),
-            MetadataField(name="rating", type="float", required=False),
-            MetadataField(name="is_public", type="boolean", required=False),
-        ])
+        return MetadataSchema(
+            schema=[
+                MetadataField(
+                    name="tags", type="array", array_type="string", required=False
+                ),
+                MetadataField(
+                    name="scores", type="array", array_type="float", required=False
+                ),
+                MetadataField(
+                    name="ids", type="array", array_type="integer", required=False
+                ),
+                MetadataField(
+                    name="flags", type="array", array_type="boolean", required=False
+                ),
+                MetadataField(name="title", type="string", required=False),
+                MetadataField(name="rating", type="float", required=False),
+                MetadataField(name="is_public", type="boolean", required=False),
+            ]
+        )
 
     @pytest.fixture
     def boolean_schema(self):
         """Create a schema with boolean fields."""
-        return MetadataSchema(schema=[
-            MetadataField(name="is_public", type="boolean", required=False),
-            MetadataField(name="is_active", type="boolean", required=False),
-            MetadataField(name="is_verified", type="boolean", required=False),
-            MetadataField(name="is_premium", type="boolean", required=False),
-            MetadataField(name="is_archived", type="boolean", required=False),
-            MetadataField(name="has_attachments", type="boolean", required=False),
-            MetadataField(name="is_featured", type="boolean", required=False),
-            MetadataField(name="is_draft", type="boolean", required=False),
-            MetadataField(name="flags", type="array", array_type="boolean", required=False),
-            MetadataField(name="title", type="string", required=False),
-            MetadataField(name="pages", type="integer", required=False),
-            MetadataField(name="rating", type="float", required=False),
-            MetadataField(name="tags", type="array", array_type="string", required=False),
-        ])
+        return MetadataSchema(
+            schema=[
+                MetadataField(name="is_public", type="boolean", required=False),
+                MetadataField(name="is_active", type="boolean", required=False),
+                MetadataField(name="is_verified", type="boolean", required=False),
+                MetadataField(name="is_premium", type="boolean", required=False),
+                MetadataField(name="is_archived", type="boolean", required=False),
+                MetadataField(name="has_attachments", type="boolean", required=False),
+                MetadataField(name="is_featured", type="boolean", required=False),
+                MetadataField(name="is_draft", type="boolean", required=False),
+                MetadataField(
+                    name="flags", type="array", array_type="boolean", required=False
+                ),
+                MetadataField(name="title", type="string", required=False),
+                MetadataField(name="pages", type="integer", required=False),
+                MetadataField(name="rating", type="float", required=False),
+                MetadataField(
+                    name="tags", type="array", array_type="string", required=False
+                ),
+            ]
+        )
 
     @pytest.fixture
     def datetime_schema(self):
         """Create a schema with datetime fields."""
-        return MetadataSchema(schema=[
-            MetadataField(name="created_date", type="datetime", required=False),
-            MetadataField(name="updated_date", type="datetime", required=False),
-            MetadataField(name="published_date", type="datetime", required=False),
-            MetadataField(name="expiry_date", type="datetime", required=False),
-            MetadataField(name="last_accessed", type="datetime", required=False),
-            MetadataField(name="scheduled_date", type="datetime", required=False),
-            MetadataField(name="review_date", type="datetime", required=False),
-            MetadataField(name="archive_date", type="datetime", required=False),
-            MetadataField(name="title", type="string", required=False),
-            MetadataField(name="pages", type="integer", required=False),
-            MetadataField(name="rating", type="float", required=False),
-            MetadataField(name="is_public", type="boolean", required=False),
-            MetadataField(name="tags", type="array", array_type="string", required=False),
-        ])
+        return MetadataSchema(
+            schema=[
+                MetadataField(name="created_date", type="datetime", required=False),
+                MetadataField(name="updated_date", type="datetime", required=False),
+                MetadataField(name="published_date", type="datetime", required=False),
+                MetadataField(name="expiry_date", type="datetime", required=False),
+                MetadataField(name="last_accessed", type="datetime", required=False),
+                MetadataField(name="scheduled_date", type="datetime", required=False),
+                MetadataField(name="review_date", type="datetime", required=False),
+                MetadataField(name="archive_date", type="datetime", required=False),
+                MetadataField(name="title", type="string", required=False),
+                MetadataField(name="pages", type="integer", required=False),
+                MetadataField(name="rating", type="float", required=False),
+                MetadataField(name="is_public", type="boolean", required=False),
+                MetadataField(
+                    name="tags", type="array", array_type="string", required=False
+                ),
+            ]
+        )
 
     @pytest.fixture
     def numeric_schema(self):
         """Create a schema with numeric fields."""
-        return MetadataSchema(schema=[
-            MetadataField(name="pages", type="integer", required=False),
-            MetadataField(name="word_count", type="integer", required=False),
-            MetadataField(name="quantity", type="integer", required=False),
-            MetadataField(name="rating", type="float", required=False),
-            MetadataField(name="score", type="float", required=False),
-            MetadataField(name="percentage", type="float", required=False),
-            MetadataField(name="file_size", type="number", required=False),
-            MetadataField(name="price", type="number", required=False),
-            MetadataField(name="scores", type="array", array_type="number", required=False),
-            MetadataField(name="ratings", type="array", array_type="integer", required=False),
-            MetadataField(name="title", type="string", required=False),
-            MetadataField(name="category", type="string", required=False),
-            MetadataField(name="tags", type="array", array_type="string", required=False),
-            MetadataField(name="is_premium", type="boolean", required=False),
-        ])
+        return MetadataSchema(
+            schema=[
+                MetadataField(name="pages", type="integer", required=False),
+                MetadataField(name="word_count", type="integer", required=False),
+                MetadataField(name="quantity", type="integer", required=False),
+                MetadataField(name="rating", type="float", required=False),
+                MetadataField(name="score", type="float", required=False),
+                MetadataField(name="percentage", type="float", required=False),
+                MetadataField(name="file_size", type="number", required=False),
+                MetadataField(name="price", type="number", required=False),
+                MetadataField(
+                    name="scores", type="array", array_type="number", required=False
+                ),
+                MetadataField(
+                    name="ratings", type="array", array_type="integer", required=False
+                ),
+                MetadataField(name="title", type="string", required=False),
+                MetadataField(name="category", type="string", required=False),
+                MetadataField(
+                    name="tags", type="array", array_type="string", required=False
+                ),
+                MetadataField(name="is_premium", type="boolean", required=False),
+            ]
+        )
 
     @pytest.fixture
     def string_schema(self):
         """Create a schema with string fields."""
-        return MetadataSchema(schema=[
-            MetadataField(name="title", type="string", required=True, max_length=1000),
-            MetadataField(name="author", type="string", required=False, max_length=500),
-            MetadataField(name="description", type="string", required=False, max_length=2000),
-            MetadataField(name="category", type="string", required=False, max_length=100),
-            MetadataField(name="tags", type="array", array_type="string", required=False, max_length=50),
-            MetadataField(name="file_path", type="string", required=False, max_length=1000),
-            MetadataField(name="mime_type", type="string", required=False, max_length=100),
-            MetadataField(name="pages", type="integer", required=False),
-            MetadataField(name="rating", type="float", required=False),
-            MetadataField(name="is_public", type="boolean", required=False),
-        ])
+        return MetadataSchema(
+            schema=[
+                MetadataField(
+                    name="title", type="string", required=True, max_length=1000
+                ),
+                MetadataField(
+                    name="author", type="string", required=False, max_length=500
+                ),
+                MetadataField(
+                    name="description", type="string", required=False, max_length=2000
+                ),
+                MetadataField(
+                    name="category", type="string", required=False, max_length=100
+                ),
+                MetadataField(
+                    name="tags",
+                    type="array",
+                    array_type="string",
+                    required=False,
+                    max_length=50,
+                ),
+                MetadataField(
+                    name="file_path", type="string", required=False, max_length=1000
+                ),
+                MetadataField(
+                    name="mime_type", type="string", required=False, max_length=100
+                ),
+                MetadataField(name="pages", type="integer", required=False),
+                MetadataField(name="rating", type="float", required=False),
+                MetadataField(name="is_public", type="boolean", required=False),
+            ]
+        )
 
     @pytest.fixture
     def required_field_schema(self):
         """Create a schema with required fields for testing."""
-        return MetadataSchema(schema=[
-            MetadataField(name="required_string", type="string", required=True, max_length=100),
-            MetadataField(name="required_integer", type="integer", required=True),
-            MetadataField(name="required_float", type="float", required=True),
-            MetadataField(name="required_boolean", type="boolean", required=True),
-            MetadataField(name="required_datetime", type="datetime", required=True),
-            MetadataField(name="required_array_string", type="array", array_type="string", required=True, max_length=10),
-            MetadataField(name="optional_string", type="string", required=False, max_length=100),
-            MetadataField(name="optional_integer", type="integer", required=False),
-            MetadataField(name="optional_float", type="float", required=False),
-            MetadataField(name="optional_boolean", type="boolean", required=False),
-            MetadataField(name="optional_datetime", type="datetime", required=False),
-            MetadataField(name="optional_array_integer", type="array", array_type="integer", required=False, max_length=10),
-            MetadataField(name="optional_array_boolean", type="array", array_type="boolean", required=False, max_length=10),
-        ])
+        return MetadataSchema(
+            schema=[
+                MetadataField(
+                    name="required_string", type="string", required=True, max_length=100
+                ),
+                MetadataField(name="required_integer", type="integer", required=True),
+                MetadataField(name="required_float", type="float", required=True),
+                MetadataField(name="required_boolean", type="boolean", required=True),
+                MetadataField(name="required_datetime", type="datetime", required=True),
+                MetadataField(
+                    name="required_array_string",
+                    type="array",
+                    array_type="string",
+                    required=True,
+                    max_length=10,
+                ),
+                MetadataField(
+                    name="optional_string",
+                    type="string",
+                    required=False,
+                    max_length=100,
+                ),
+                MetadataField(name="optional_integer", type="integer", required=False),
+                MetadataField(name="optional_float", type="float", required=False),
+                MetadataField(name="optional_boolean", type="boolean", required=False),
+                MetadataField(
+                    name="optional_datetime", type="datetime", required=False
+                ),
+                MetadataField(
+                    name="optional_array_integer",
+                    type="array",
+                    array_type="integer",
+                    required=False,
+                    max_length=10,
+                ),
+                MetadataField(
+                    name="optional_array_boolean",
+                    type="array",
+                    array_type="boolean",
+                    required=False,
+                    max_length=10,
+                ),
+            ]
+        )
 
     # ============================================================================
     # Array Metadata Tests
@@ -153,11 +232,11 @@ class TestMetadataValidator:
             "flags": [True, True, False],
             "title": "Urgent Policy Document",
             "rating": 4.5,
-            "is_public": True
+            "is_public": True,
         }
 
-        is_valid, errors, normalized_data = validator.validate_and_normalize_metadata_values(
-            metadata, array_schema
+        is_valid, errors, normalized_data = (
+            validator.validate_and_normalize_metadata_values(metadata, array_schema)
         )
 
         assert is_valid is True
@@ -176,11 +255,11 @@ class TestMetadataValidator:
             "flags": [],
             "title": "Empty Arrays Document",
             "rating": 0.0,
-            "is_public": False
+            "is_public": False,
         }
 
-        is_valid, errors, normalized_data = validator.validate_and_normalize_metadata_values(
-            metadata, array_schema
+        is_valid, errors, normalized_data = (
+            validator.validate_and_normalize_metadata_values(metadata, array_schema)
         )
 
         assert is_valid is True
@@ -197,8 +276,8 @@ class TestMetadataValidator:
             "flags": ["true", "false"],
         }
 
-        is_valid, errors, normalized_data = validator.validate_and_normalize_metadata_values(
-            metadata, array_schema
+        is_valid, errors, normalized_data = (
+            validator.validate_and_normalize_metadata_values(metadata, array_schema)
         )
 
         assert is_valid is False
@@ -214,8 +293,8 @@ class TestMetadataValidator:
             "scores": [0.8, "0.9", 0.7],
         }
 
-        is_valid, errors, normalized_data = validator.validate_and_normalize_metadata_values(
-            metadata, array_schema
+        is_valid, errors, normalized_data = (
+            validator.validate_and_normalize_metadata_values(metadata, array_schema)
         )
 
         assert is_valid is False
@@ -230,11 +309,11 @@ class TestMetadataValidator:
             "flags": [True, True, True],
             "title": "Premium Verified Document",
             "rating": 5.0,
-            "is_public": True
+            "is_public": True,
         }
 
-        is_valid, errors, normalized_data = validator.validate_and_normalize_metadata_values(
-            metadata, array_schema
+        is_valid, errors, normalized_data = (
+            validator.validate_and_normalize_metadata_values(metadata, array_schema)
         )
 
         assert is_valid is True
@@ -251,11 +330,11 @@ class TestMetadataValidator:
             "flags": [False, False, False],
             "title": "Archived Draft Document",
             "rating": 1.0,
-            "is_public": False
+            "is_public": False,
         }
 
-        is_valid, errors, normalized_data = validator.validate_and_normalize_metadata_values(
-            metadata, array_schema
+        is_valid, errors, normalized_data = (
+            validator.validate_and_normalize_metadata_values(metadata, array_schema)
         )
 
         assert is_valid is True
@@ -272,11 +351,11 @@ class TestMetadataValidator:
             "flags": ["true", "false", "true"],
             "title": "String Conversion Test",
             "rating": "4.5",
-            "is_public": "true"
+            "is_public": "true",
         }
 
-        is_valid, errors, normalized_data = validator.validate_and_normalize_metadata_values(
-            metadata, array_schema
+        is_valid, errors, normalized_data = (
+            validator.validate_and_normalize_metadata_values(metadata, array_schema)
         )
 
         assert is_valid is True
@@ -296,11 +375,11 @@ class TestMetadataValidator:
             "flags": [True, True, False],
             "title": "Urgent Policy Document",
             "rating": 4.5,
-            "is_public": True
+            "is_public": True,
         }
 
-        is_valid, errors, normalized_data = validator.validate_and_normalize_metadata_values(
-            metadata, array_schema
+        is_valid, errors, normalized_data = (
+            validator.validate_and_normalize_metadata_values(metadata, array_schema)
         )
 
         assert is_valid is True
@@ -322,11 +401,11 @@ class TestMetadataValidator:
             "flags": [False, False, True],
             "title": "Draft Internal Document",
             "rating": 2.0,
-            "is_public": False
+            "is_public": False,
         }
 
-        is_valid, errors, normalized_data = validator.validate_and_normalize_metadata_values(
-            metadata, array_schema
+        is_valid, errors, normalized_data = (
+            validator.validate_and_normalize_metadata_values(metadata, array_schema)
         )
 
         assert is_valid is True
@@ -348,11 +427,11 @@ class TestMetadataValidator:
             "flags": [True, False, True],
             "title": "Verified Public Document",
             "rating": 3.5,
-            "is_public": True
+            "is_public": True,
         }
 
-        is_valid, errors, normalized_data = validator.validate_and_normalize_metadata_values(
-            metadata, array_schema
+        is_valid, errors, normalized_data = (
+            validator.validate_and_normalize_metadata_values(metadata, array_schema)
         )
 
         assert is_valid is True
@@ -374,11 +453,11 @@ class TestMetadataValidator:
             "flags": [True, True, True],
             "title": "Premium Private Document",
             "rating": 4.8,
-            "is_public": False
+            "is_public": False,
         }
 
-        is_valid, errors, normalized_data = validator.validate_and_normalize_metadata_values(
-            metadata, array_schema
+        is_valid, errors, normalized_data = (
+            validator.validate_and_normalize_metadata_values(metadata, array_schema)
         )
 
         assert is_valid is True
@@ -400,11 +479,11 @@ class TestMetadataValidator:
             "flags": [True, True, False],
             "title": "Featured Active Document",
             "rating": 4.2,
-            "is_public": True
+            "is_public": True,
         }
 
-        is_valid, errors, normalized_data = validator.validate_and_normalize_metadata_values(
-            metadata, array_schema
+        is_valid, errors, normalized_data = (
+            validator.validate_and_normalize_metadata_values(metadata, array_schema)
         )
 
         assert is_valid is True
@@ -426,11 +505,11 @@ class TestMetadataValidator:
             "flags": [False, False, False],
             "title": "Archived Draft Document",
             "rating": 1.0,
-            "is_public": False
+            "is_public": False,
         }
 
-        is_valid, errors, normalized_data = validator.validate_and_normalize_metadata_values(
-            metadata, array_schema
+        is_valid, errors, normalized_data = (
+            validator.validate_and_normalize_metadata_values(metadata, array_schema)
         )
 
         assert is_valid is True
@@ -462,11 +541,11 @@ class TestMetadataValidator:
             "title": "Premium Policy Document",
             "pages": 100,
             "rating": 4.8,
-            "tags": ["important", "urgent", "policy"]
+            "tags": ["important", "urgent", "policy"],
         }
 
-        is_valid, errors, normalized_data = validator.validate_and_normalize_metadata_values(
-            metadata, boolean_schema
+        is_valid, errors, normalized_data = (
+            validator.validate_and_normalize_metadata_values(metadata, boolean_schema)
         )
 
         assert is_valid is True
@@ -488,8 +567,8 @@ class TestMetadataValidator:
             "is_draft": "False",
         }
 
-        is_valid, errors, normalized_data = validator.validate_and_normalize_metadata_values(
-            metadata, boolean_schema
+        is_valid, errors, normalized_data = (
+            validator.validate_and_normalize_metadata_values(metadata, boolean_schema)
         )
 
         assert is_valid is True
@@ -507,8 +586,8 @@ class TestMetadataValidator:
             "is_verified": ["not", "boolean"],
         }
 
-        is_valid, errors, normalized_data = validator.validate_and_normalize_metadata_values(
-            metadata, boolean_schema
+        is_valid, errors, normalized_data = (
+            validator.validate_and_normalize_metadata_values(metadata, boolean_schema)
         )
 
         assert is_valid is False
@@ -521,8 +600,8 @@ class TestMetadataValidator:
             "flags": [],
         }
 
-        is_valid, errors, normalized_data = validator.validate_and_normalize_metadata_values(
-            metadata, boolean_schema
+        is_valid, errors, normalized_data = (
+            validator.validate_and_normalize_metadata_values(metadata, boolean_schema)
         )
 
         assert is_valid is True
@@ -544,11 +623,11 @@ class TestMetadataValidator:
             "title": "Premium Policy Document",
             "pages": 100,
             "rating": 4.8,
-            "tags": ["important", "urgent", "policy"]
+            "tags": ["important", "urgent", "policy"],
         }
 
-        is_valid, errors, normalized_data = validator.validate_and_normalize_metadata_values(
-            metadata, boolean_schema
+        is_valid, errors, normalized_data = (
+            validator.validate_and_normalize_metadata_values(metadata, boolean_schema)
         )
 
         assert is_valid is True
@@ -578,11 +657,11 @@ class TestMetadataValidator:
             "title": "Draft Internal Document",
             "pages": 25,
             "rating": 2.0,
-            "tags": ["draft", "internal"]
+            "tags": ["draft", "internal"],
         }
 
-        is_valid, errors, normalized_data = validator.validate_and_normalize_metadata_values(
-            metadata, boolean_schema
+        is_valid, errors, normalized_data = (
+            validator.validate_and_normalize_metadata_values(metadata, boolean_schema)
         )
 
         assert is_valid is True
@@ -612,11 +691,11 @@ class TestMetadataValidator:
             "title": "Mixed Boolean Document",
             "pages": 75,
             "rating": 3.5,
-            "tags": ["mixed", "boolean"]
+            "tags": ["mixed", "boolean"],
         }
 
-        is_valid, errors, normalized_data = validator.validate_and_normalize_metadata_values(
-            metadata, boolean_schema
+        is_valid, errors, normalized_data = (
+            validator.validate_and_normalize_metadata_values(metadata, boolean_schema)
         )
 
         assert is_valid is True
@@ -637,11 +716,11 @@ class TestMetadataValidator:
             "title": "Another Mixed Document",
             "pages": 150,
             "rating": 4.2,
-            "tags": ["another", "mixed"]
+            "tags": ["another", "mixed"],
         }
 
-        is_valid2, errors2, normalized_data2 = validator.validate_and_normalize_metadata_values(
-            metadata2, boolean_schema
+        is_valid2, errors2, normalized_data2 = (
+            validator.validate_and_normalize_metadata_values(metadata2, boolean_schema)
         )
 
         assert is_valid2 is True
@@ -663,11 +742,11 @@ class TestMetadataValidator:
             "title": "Minimal Document",
             "pages": 0,
             "rating": 0.0,
-            "tags": []
+            "tags": [],
         }
 
-        is_valid, errors, normalized_data = validator.validate_and_normalize_metadata_values(
-            metadata, boolean_schema
+        is_valid, errors, normalized_data = (
+            validator.validate_and_normalize_metadata_values(metadata, boolean_schema)
         )
 
         assert is_valid is True
@@ -702,17 +781,20 @@ class TestMetadataValidator:
             "pages": 100,
             "rating": 4.8,
             "is_public": True,
-            "tags": ["important", "urgent", "policy", "2024"]
+            "tags": ["important", "urgent", "policy", "2024"],
         }
 
-        is_valid, errors, normalized_data = validator.validate_and_normalize_metadata_values(
-            metadata, datetime_schema
+        is_valid, errors, normalized_data = (
+            validator.validate_and_normalize_metadata_values(metadata, datetime_schema)
         )
 
         assert is_valid is True
         assert len(errors) == 0
         assert "T" in normalized_data["created_date"]
-        assert "Z" in normalized_data["created_date"] or "+" in normalized_data["created_date"]
+        assert (
+            "Z" in normalized_data["created_date"]
+            or "+" in normalized_data["created_date"]
+        )
 
     def test_datetime_metadata_various_formats(self, validator, datetime_schema):
         """Test datetime validation with various input formats."""
@@ -723,8 +805,8 @@ class TestMetadataValidator:
             "expiry_date": "2024/01/15",  # Slash separator
         }
 
-        is_valid, errors, normalized_data = validator.validate_and_normalize_metadata_values(
-            metadata, datetime_schema
+        is_valid, errors, normalized_data = (
+            validator.validate_and_normalize_metadata_values(metadata, datetime_schema)
         )
 
         assert is_valid is True
@@ -740,8 +822,8 @@ class TestMetadataValidator:
             "published_date": "2024-13-45",
         }
 
-        is_valid, errors, normalized_data = validator.validate_and_normalize_metadata_values(
-            metadata, datetime_schema
+        is_valid, errors, normalized_data = (
+            validator.validate_and_normalize_metadata_values(metadata, datetime_schema)
         )
 
         assert is_valid is False
@@ -754,8 +836,8 @@ class TestMetadataValidator:
             "updated_date": "2024-02-29T23:59:59",
         }
 
-        is_valid, errors, normalized_data = validator.validate_and_normalize_metadata_values(
-            metadata, datetime_schema
+        is_valid, errors, normalized_data = (
+            validator.validate_and_normalize_metadata_values(metadata, datetime_schema)
         )
 
         assert is_valid is True
@@ -767,8 +849,8 @@ class TestMetadataValidator:
             "created_date": "2023-02-29T12:00:00",  # Invalid leap day in 2023
         }
 
-        is_valid, errors, normalized_data = validator.validate_and_normalize_metadata_values(
-            metadata, datetime_schema
+        is_valid, errors, normalized_data = (
+            validator.validate_and_normalize_metadata_values(metadata, datetime_schema)
         )
 
         assert is_valid is False
@@ -789,17 +871,20 @@ class TestMetadataValidator:
             "pages": 45,
             "rating": 4.5,
             "is_public": True,
-            "tags": ["year-boundary", "featured", "special"]
+            "tags": ["year-boundary", "featured", "special"],
         }
 
-        is_valid, errors, normalized_data = validator.validate_and_normalize_metadata_values(
-            metadata, datetime_schema
+        is_valid, errors, normalized_data = (
+            validator.validate_and_normalize_metadata_values(metadata, datetime_schema)
         )
 
         assert is_valid is True
         assert len(errors) == 0
         assert "2023-12-31" in normalized_data["created_date"]
-        assert "2024-01-01" in normalized_data["updated_date"] or "2023-12-31" in normalized_data["updated_date"]  # Timezone conversion
+        assert (
+            "2024-01-01" in normalized_data["updated_date"]
+            or "2023-12-31" in normalized_data["updated_date"]
+        )  # Timezone conversion
 
     def test_datetime_metadata_business_hours(self, validator, datetime_schema):
         """Test validation with business hours dates like Document 7."""
@@ -816,11 +901,11 @@ class TestMetadataValidator:
             "pages": 80,
             "rating": 4.0,
             "is_public": True,
-            "tags": ["business", "active", "regular"]
+            "tags": ["business", "active", "regular"],
         }
 
-        is_valid, errors, normalized_data = validator.validate_and_normalize_metadata_values(
-            metadata, datetime_schema
+        is_valid, errors, normalized_data = (
+            validator.validate_and_normalize_metadata_values(metadata, datetime_schema)
         )
 
         assert is_valid is True
@@ -843,11 +928,11 @@ class TestMetadataValidator:
             "pages": 150,
             "rating": 4.2,
             "is_public": False,
-            "tags": ["future", "premium", "scheduled"]
+            "tags": ["future", "premium", "scheduled"],
         }
 
-        is_valid, errors, normalized_data = validator.validate_and_normalize_metadata_values(
-            metadata, datetime_schema
+        is_valid, errors, normalized_data = (
+            validator.validate_and_normalize_metadata_values(metadata, datetime_schema)
         )
 
         assert is_valid is True
@@ -870,17 +955,23 @@ class TestMetadataValidator:
             "pages": 60,
             "rating": 1.5,
             "is_public": False,
-            "tags": ["expired", "inactive"]
+            "tags": ["expired", "inactive"],
         }
 
-        is_valid, errors, normalized_data = validator.validate_and_normalize_metadata_values(
-            metadata, datetime_schema
+        is_valid, errors, normalized_data = (
+            validator.validate_and_normalize_metadata_values(metadata, datetime_schema)
         )
 
         assert is_valid is True
         assert len(errors) == 0
-        assert "2024-01-01" in normalized_data["expiry_date"] or "2023-12-31" in normalized_data["expiry_date"]  # Timezone conversion
-        assert "2024-01-15" in normalized_data["archive_date"] or "2024-01-14" in normalized_data["archive_date"]  # Timezone conversion
+        assert (
+            "2024-01-01" in normalized_data["expiry_date"]
+            or "2023-12-31" in normalized_data["expiry_date"]
+        )  # Timezone conversion
+        assert (
+            "2024-01-15" in normalized_data["archive_date"]
+            or "2024-01-14" in normalized_data["archive_date"]
+        )  # Timezone conversion
 
     def test_datetime_metadata_minimal_dates(self, validator, datetime_schema):
         """Test validation with minimal datetime metadata like Document 8."""
@@ -897,17 +988,23 @@ class TestMetadataValidator:
             "pages": 10,
             "rating": 1.0,
             "is_public": False,
-            "tags": ["minimal", "edge-case"]
+            "tags": ["minimal", "edge-case"],
         }
 
-        is_valid, errors, normalized_data = validator.validate_and_normalize_metadata_values(
-            metadata, datetime_schema
+        is_valid, errors, normalized_data = (
+            validator.validate_and_normalize_metadata_values(metadata, datetime_schema)
         )
 
         assert is_valid is True
         assert len(errors) == 0
-        assert "2024-01-01" in normalized_data["created_date"] or "2023-12-31" in normalized_data["created_date"]
-        assert "2024-12-31" in normalized_data["expiry_date"] or "2024-12-30" in normalized_data["expiry_date"]
+        assert (
+            "2024-01-01" in normalized_data["created_date"]
+            or "2023-12-31" in normalized_data["created_date"]
+        )
+        assert (
+            "2024-12-31" in normalized_data["expiry_date"]
+            or "2024-12-30" in normalized_data["expiry_date"]
+        )
 
     # ============================================================================
     # Numeric Metadata Tests
@@ -929,11 +1026,11 @@ class TestMetadataValidator:
             "title": "Premium Technical Guide",
             "category": "technical",
             "tags": ["premium", "technical", "comprehensive"],
-            "is_premium": True
+            "is_premium": True,
         }
 
-        is_valid, errors, normalized_data = validator.validate_and_normalize_metadata_values(
-            metadata, numeric_schema
+        is_valid, errors, normalized_data = (
+            validator.validate_and_normalize_metadata_values(metadata, numeric_schema)
         )
 
         assert is_valid is True
@@ -952,8 +1049,8 @@ class TestMetadataValidator:
             "ratings": ["5", "4", "5"],
         }
 
-        is_valid, errors, normalized_data = validator.validate_and_normalize_metadata_values(
-            metadata, numeric_schema
+        is_valid, errors, normalized_data = (
+            validator.validate_and_normalize_metadata_values(metadata, numeric_schema)
         )
 
         assert is_valid is True
@@ -970,8 +1067,8 @@ class TestMetadataValidator:
             "scores": ["0.95", "not-a-number"],
         }
 
-        is_valid, errors, normalized_data = validator.validate_and_normalize_metadata_values(
-            metadata, numeric_schema
+        is_valid, errors, normalized_data = (
+            validator.validate_and_normalize_metadata_values(metadata, numeric_schema)
         )
 
         assert is_valid is False
@@ -986,8 +1083,8 @@ class TestMetadataValidator:
             "scores": [-0.5, -0.3],
         }
 
-        is_valid, errors, normalized_data = validator.validate_and_normalize_metadata_values(
-            metadata, numeric_schema
+        is_valid, errors, normalized_data = (
+            validator.validate_and_normalize_metadata_values(metadata, numeric_schema)
         )
 
         assert is_valid is True
@@ -1005,8 +1102,8 @@ class TestMetadataValidator:
             "ratings": [],
         }
 
-        is_valid, errors, normalized_data = validator.validate_and_normalize_metadata_values(
-            metadata, numeric_schema
+        is_valid, errors, normalized_data = (
+            validator.validate_and_normalize_metadata_values(metadata, numeric_schema)
         )
 
         assert is_valid is True
@@ -1022,8 +1119,8 @@ class TestMetadataValidator:
             "scores": [9e-1, 8.5e-1],  # 0.9, 0.85
         }
 
-        is_valid, errors, normalized_data = validator.validate_and_normalize_metadata_values(
-            metadata, numeric_schema
+        is_valid, errors, normalized_data = (
+            validator.validate_and_normalize_metadata_values(metadata, numeric_schema)
         )
 
         assert is_valid is True
@@ -1047,11 +1144,11 @@ class TestMetadataValidator:
             "title": "Premium Technical Guide",
             "category": "technical",
             "tags": ["premium", "technical", "comprehensive"],
-            "is_premium": True
+            "is_premium": True,
         }
 
-        is_valid, errors, normalized_data = validator.validate_and_normalize_metadata_values(
-            metadata, numeric_schema
+        is_valid, errors, normalized_data = (
+            validator.validate_and_normalize_metadata_values(metadata, numeric_schema)
         )
 
         assert is_valid is True
@@ -1079,11 +1176,11 @@ class TestMetadataValidator:
             "title": "Business Process Guide",
             "category": "business",
             "tags": ["business", "process", "standard"],
-            "is_premium": False
+            "is_premium": False,
         }
 
-        is_valid, errors, normalized_data = validator.validate_and_normalize_metadata_values(
-            metadata, numeric_schema
+        is_valid, errors, normalized_data = (
+            validator.validate_and_normalize_metadata_values(metadata, numeric_schema)
         )
 
         assert is_valid is True
@@ -1110,11 +1207,11 @@ class TestMetadataValidator:
             "title": "Basic Introduction",
             "category": "basic",
             "tags": ["basic", "introduction", "simple"],
-            "is_premium": False
+            "is_premium": False,
         }
 
-        is_valid, errors, normalized_data = validator.validate_and_normalize_metadata_values(
-            metadata, numeric_schema
+        is_valid, errors, normalized_data = (
+            validator.validate_and_normalize_metadata_values(metadata, numeric_schema)
         )
 
         assert is_valid is True
@@ -1141,11 +1238,11 @@ class TestMetadataValidator:
             "title": "Comprehensive Research Paper",
             "category": "research",
             "tags": ["research", "comprehensive", "extensive", "maximum"],
-            "is_premium": True
+            "is_premium": True,
         }
 
-        is_valid, errors, normalized_data = validator.validate_and_normalize_metadata_values(
-            metadata, numeric_schema
+        is_valid, errors, normalized_data = (
+            validator.validate_and_normalize_metadata_values(metadata, numeric_schema)
         )
 
         assert is_valid is True
@@ -1173,11 +1270,11 @@ class TestMetadataValidator:
             "title": "Precision Metrics Document",
             "category": "precision",
             "tags": ["precision", "exact", "decimal"],
-            "is_premium": True
+            "is_premium": True,
         }
 
-        is_valid, errors, normalized_data = validator.validate_and_normalize_metadata_values(
-            metadata, numeric_schema
+        is_valid, errors, normalized_data = (
+            validator.validate_and_normalize_metadata_values(metadata, numeric_schema)
         )
 
         assert is_valid is True
@@ -1195,11 +1292,11 @@ class TestMetadataValidator:
             "title": "Minimal Document",
             "category": "minimal",
             "tags": ["minimal", "edge-case"],
-            "is_premium": False
+            "is_premium": False,
         }
 
-        is_valid, errors, normalized_data = validator.validate_and_normalize_metadata_values(
-            metadata, numeric_schema
+        is_valid, errors, normalized_data = (
+            validator.validate_and_normalize_metadata_values(metadata, numeric_schema)
         )
 
         assert is_valid is True
@@ -1236,11 +1333,11 @@ class TestMetadataValidator:
             "title": "Mid-Range Document",
             "category": "mid-range",
             "tags": ["mid-range", "average", "balanced"],
-            "is_premium": False
+            "is_premium": False,
         }
 
-        is_valid, errors, normalized_data = validator.validate_and_normalize_metadata_values(
-            metadata, numeric_schema
+        is_valid, errors, normalized_data = (
+            validator.validate_and_normalize_metadata_values(metadata, numeric_schema)
         )
 
         assert is_valid is True
@@ -1253,7 +1350,9 @@ class TestMetadataValidator:
         assert normalized_data["file_size"] == 750000
         assert normalized_data["price"] == 75.00
 
-    def test_numeric_metadata_scientific_notation_arrays(self, validator, numeric_schema):
+    def test_numeric_metadata_scientific_notation_arrays(
+        self, validator, numeric_schema
+    ):
         """Test validation with scientific notation in arrays like Document 10."""
         metadata = {
             "pages": 1000,
@@ -1269,11 +1368,11 @@ class TestMetadataValidator:
             "title": "Scientific Research Document",
             "category": "scientific",
             "tags": ["scientific", "research", "notation"],
-            "is_premium": True
+            "is_premium": True,
         }
 
-        is_valid, errors, normalized_data = validator.validate_and_normalize_metadata_values(
-            metadata, numeric_schema
+        is_valid, errors, normalized_data = (
+            validator.validate_and_normalize_metadata_values(metadata, numeric_schema)
         )
 
         assert is_valid is True
@@ -1298,18 +1397,23 @@ class TestMetadataValidator:
             "mime_type": "application/pdf",
             "pages": 25,
             "rating": 4.5,
-            "is_public": True
+            "is_public": True,
         }
 
-        is_valid, errors, normalized_data = validator.validate_and_normalize_metadata_values(
-            metadata, string_schema
+        is_valid, errors, normalized_data = (
+            validator.validate_and_normalize_metadata_values(metadata, string_schema)
         )
 
         assert is_valid is True
         assert len(errors) == 0
         assert normalized_data["title"] == "policy on accepting corrected claims"
         assert normalized_data["author"] == "john smith"
-        assert normalized_data["tags"] == ["policy", "claims", "healthcare", "procedures"]
+        assert normalized_data["tags"] == [
+            "policy",
+            "claims",
+            "healthcare",
+            "procedures",
+        ]
 
     def test_string_metadata_unicode_support(self, validator, string_schema):
         """Test string validation with Unicode characters."""
@@ -1321,8 +1425,8 @@ class TestMetadataValidator:
             "tags": ["special", "unicode", "policy", "claims"],
         }
 
-        is_valid, errors, normalized_data = validator.validate_and_normalize_metadata_values(
-            metadata, string_schema
+        is_valid, errors, normalized_data = (
+            validator.validate_and_normalize_metadata_values(metadata, string_schema)
         )
 
         assert is_valid is True
@@ -1340,8 +1444,8 @@ class TestMetadataValidator:
             "tags": [],
         }
 
-        is_valid, errors, normalized_data = validator.validate_and_normalize_metadata_values(
-            metadata, string_schema
+        is_valid, errors, normalized_data = (
+            validator.validate_and_normalize_metadata_values(metadata, string_schema)
         )
 
         assert is_valid is False
@@ -1360,8 +1464,8 @@ class TestMetadataValidator:
             "category": "persona_B",
         }
 
-        is_valid, errors, normalized_data = validator.validate_and_normalize_metadata_values(
-            metadata, string_schema
+        is_valid, errors, normalized_data = (
+            validator.validate_and_normalize_metadata_values(metadata, string_schema)
         )
 
         assert is_valid is False
@@ -1376,8 +1480,8 @@ class TestMetadataValidator:
             "category": "  persona_A  ",
         }
 
-        is_valid, errors, normalized_data = validator.validate_and_normalize_metadata_values(
-            metadata, string_schema
+        is_valid, errors, normalized_data = (
+            validator.validate_and_normalize_metadata_values(metadata, string_schema)
         )
 
         assert is_valid is True
@@ -1387,11 +1491,26 @@ class TestMetadataValidator:
 
     def test_field_level_max_length_constraints(self, validator):
         """Test that field-level max_length constraints are properly enforced."""
-        schema = MetadataSchema(schema=[
-            MetadataField(name="short_title", type="string", required=False, max_length=10),
-            MetadataField(name="medium_description", type="string", required=False, max_length=50),
-            MetadataField(name="limited_tags", type="array", array_type="string", required=False, max_length=3),
-        ])
+        schema = MetadataSchema(
+            schema=[
+                MetadataField(
+                    name="short_title", type="string", required=False, max_length=10
+                ),
+                MetadataField(
+                    name="medium_description",
+                    type="string",
+                    required=False,
+                    max_length=50,
+                ),
+                MetadataField(
+                    name="limited_tags",
+                    type="array",
+                    array_type="string",
+                    required=False,
+                    max_length=3,
+                ),
+            ]
+        )
 
         valid_metadata = {
             "short_title": "Short",
@@ -1399,8 +1518,8 @@ class TestMetadataValidator:
             "limited_tags": ["tag1", "tag2"],
         }
 
-        is_valid, errors, normalized_data = validator.validate_and_normalize_metadata_values(
-            valid_metadata, schema
+        is_valid, errors, normalized_data = (
+            validator.validate_and_normalize_metadata_values(valid_metadata, schema)
         )
 
         assert is_valid is True
@@ -1412,8 +1531,8 @@ class TestMetadataValidator:
             "limited_tags": ["tag1", "tag2", "tag3", "tag4"],
         }
 
-        is_valid, errors, normalized_data = validator.validate_and_normalize_metadata_values(
-            invalid_metadata, schema
+        is_valid, errors, normalized_data = (
+            validator.validate_and_normalize_metadata_values(invalid_metadata, schema)
         )
 
         assert is_valid is False
@@ -1425,18 +1544,22 @@ class TestMetadataValidator:
 
     def test_config_level_max_length_defaults(self, validator):
         """Test that config-level max_length defaults are used when field-level max_length is not specified."""
-        schema = MetadataSchema(schema=[
-            MetadataField(name="title", type="string", required=False),
-            MetadataField(name="tags", type="array", array_type="string", required=False),
-        ])
+        schema = MetadataSchema(
+            schema=[
+                MetadataField(name="title", type="string", required=False),
+                MetadataField(
+                    name="tags", type="array", array_type="string", required=False
+                ),
+            ]
+        )
 
         valid_metadata = {
             "title": "A" * 1000,
             "tags": ["tag"] * 500,
         }
 
-        is_valid, errors, normalized_data = validator.validate_and_normalize_metadata_values(
-            valid_metadata, schema
+        is_valid, errors, normalized_data = (
+            validator.validate_and_normalize_metadata_values(valid_metadata, schema)
         )
 
         assert is_valid is True
@@ -1447,8 +1570,8 @@ class TestMetadataValidator:
             "tags": ["tag"] * 1500,
         }
 
-        is_valid, errors, normalized_data = validator.validate_and_normalize_metadata_values(
-            invalid_metadata, schema
+        is_valid, errors, normalized_data = (
+            validator.validate_and_normalize_metadata_values(invalid_metadata, schema)
         )
 
         assert is_valid is False
@@ -1469,11 +1592,11 @@ class TestMetadataValidator:
             "mime_type": "application/pdf",
             "pages": 25,
             "rating": 4.5,
-            "is_public": True
+            "is_public": True,
         }
 
-        is_valid, errors, normalized_data = validator.validate_and_normalize_metadata_values(
-            metadata, string_schema
+        is_valid, errors, normalized_data = (
+            validator.validate_and_normalize_metadata_values(metadata, string_schema)
         )
 
         assert is_valid is True
@@ -1481,8 +1604,16 @@ class TestMetadataValidator:
         assert normalized_data["title"] == "policy on accepting corrected claims"
         assert normalized_data["author"] == "john smith"
         assert normalized_data["category"] == "persona_a"
-        assert normalized_data["tags"] == ["policy", "claims", "healthcare", "procedures"]
-        assert normalized_data["file_path"] == "/documents/policies/corrected_claims_policy.pdf"
+        assert normalized_data["tags"] == [
+            "policy",
+            "claims",
+            "healthcare",
+            "procedures",
+        ]
+        assert (
+            normalized_data["file_path"]
+            == "/documents/policies/corrected_claims_policy.pdf"
+        )
         assert normalized_data["mime_type"] == "application/pdf"
 
     def test_string_metadata_claims_guidelines(self, validator, string_schema):
@@ -1497,11 +1628,11 @@ class TestMetadataValidator:
             "mime_type": "application/pdf",
             "pages": 40,
             "rating": 4.2,
-            "is_public": False
+            "is_public": False,
         }
 
-        is_valid, errors, normalized_data = validator.validate_and_normalize_metadata_values(
-            metadata, string_schema
+        is_valid, errors, normalized_data = (
+            validator.validate_and_normalize_metadata_values(metadata, string_schema)
         )
 
         assert is_valid is True
@@ -1509,7 +1640,12 @@ class TestMetadataValidator:
         assert normalized_data["title"] == "claims processing guidelines"
         assert normalized_data["author"] == "jane doe"
         assert normalized_data["category"] == "persona_b"
-        assert normalized_data["tags"] == ["claims", "processing", "guidelines", "healthcare"]
+        assert normalized_data["tags"] == [
+            "claims",
+            "processing",
+            "guidelines",
+            "healthcare",
+        ]
         assert normalized_data["is_public"] is False
 
     def test_string_metadata_technical_specs(self, validator, string_schema):
@@ -1524,11 +1660,11 @@ class TestMetadataValidator:
             "mime_type": "application/pdf",
             "pages": 150,
             "rating": 4.8,
-            "is_public": True
+            "is_public": True,
         }
 
-        is_valid, errors, normalized_data = validator.validate_and_normalize_metadata_values(
-            metadata, string_schema
+        is_valid, errors, normalized_data = (
+            validator.validate_and_normalize_metadata_values(metadata, string_schema)
         )
 
         assert is_valid is True
@@ -1536,7 +1672,12 @@ class TestMetadataValidator:
         assert normalized_data["title"] == "technical specifications for claims system"
         assert normalized_data["author"] == "john smith"
         assert normalized_data["category"] == "persona_a"
-        assert normalized_data["tags"] == ["technical", "specifications", "system", "architecture"]
+        assert normalized_data["tags"] == [
+            "technical",
+            "specifications",
+            "system",
+            "architecture",
+        ]
         assert normalized_data["pages"] == 150
         assert normalized_data["rating"] == 4.8
 
@@ -1552,11 +1693,11 @@ class TestMetadataValidator:
             "mime_type": "application/pdf",
             "pages": 200,
             "rating": 4.0,
-            "is_public": True
+            "is_public": True,
         }
 
-        is_valid, errors, normalized_data = validator.validate_and_normalize_metadata_values(
-            metadata, string_schema
+        is_valid, errors, normalized_data = (
+            validator.validate_and_normalize_metadata_values(metadata, string_schema)
         )
 
         assert is_valid is True
@@ -1564,7 +1705,12 @@ class TestMetadataValidator:
         assert normalized_data["title"] == "training manual for claims processors"
         assert normalized_data["author"] == "sarah johnson"
         assert normalized_data["category"] == "persona_c"
-        assert normalized_data["tags"] == ["training", "manual", "processors", "education"]
+        assert normalized_data["tags"] == [
+            "training",
+            "manual",
+            "processors",
+            "education",
+        ]
         assert normalized_data["pages"] == 200
         assert normalized_data["rating"] == 4.0
 
@@ -1580,11 +1726,11 @@ class TestMetadataValidator:
             "mime_type": "text/plain",
             "pages": 0,
             "rating": 0.0,
-            "is_public": False
+            "is_public": False,
         }
 
-        is_valid, errors, normalized_data = validator.validate_and_normalize_metadata_values(
-            metadata, string_schema
+        is_valid, errors, normalized_data = (
+            validator.validate_and_normalize_metadata_values(metadata, string_schema)
         )
 
         assert is_valid is False
@@ -1608,11 +1754,11 @@ class TestMetadataValidator:
             "mime_type": "application/pdf",
             "pages": 75,
             "rating": 3.5,
-            "is_public": True
+            "is_public": True,
         }
 
-        is_valid, errors, normalized_data = validator.validate_and_normalize_metadata_values(
-            metadata, string_schema
+        is_valid, errors, normalized_data = (
+            validator.validate_and_normalize_metadata_values(metadata, string_schema)
         )
 
         assert is_valid is True
@@ -1631,28 +1777,38 @@ class TestMetadataValidator:
         metadata = {
             "title": "x" * 999,  # Very long title (within 1000 limit)
             "author": "Very Long Author Name That Exceeds Normal Limits",
-            "description": "This is a very long description that contains many words and should test the maximum length handling of the string metadata system. " * 10,
+            "description": "This is a very long description that contains many words and should test the maximum length handling of the string metadata system. "
+            * 10,
             "category": "persona_B",
             "tags": ["very", "long", "strings", "boundary", "testing"],
             "file_path": "/documents/long_strings/very_long_metadata_document.pdf",
             "mime_type": "application/pdf",
             "pages": 300,
             "rating": 4.7,
-            "is_public": True
+            "is_public": True,
         }
 
-        is_valid, errors, normalized_data = validator.validate_and_normalize_metadata_values(
-            metadata, string_schema
+        is_valid, errors, normalized_data = (
+            validator.validate_and_normalize_metadata_values(metadata, string_schema)
         )
 
         assert is_valid is True
         assert len(errors) == 0
         assert len(normalized_data["title"]) == 999
         assert normalized_data["title"] == "x" * 999
-        assert normalized_data["author"] == "very long author name that exceeds normal limits"
+        assert (
+            normalized_data["author"]
+            == "very long author name that exceeds normal limits"
+        )
         assert "very long description" in normalized_data["description"]
         assert normalized_data["category"] == "persona_b"
-        assert normalized_data["tags"] == ["very", "long", "strings", "boundary", "testing"]
+        assert normalized_data["tags"] == [
+            "very",
+            "long",
+            "strings",
+            "boundary",
+            "testing",
+        ]
 
     def test_string_metadata_mixed_content(self, validator, string_schema):
         """Test validation with mixed content like Document 8 (persona_D, private)."""
@@ -1666,11 +1822,11 @@ class TestMetadataValidator:
             "mime_type": "text/plain",
             "pages": 50,
             "rating": 3.8,
-            "is_public": False
+            "is_public": False,
         }
 
-        is_valid, errors, normalized_data = validator.validate_and_normalize_metadata_values(
-            metadata, string_schema
+        is_valid, errors, normalized_data = (
+            validator.validate_and_normalize_metadata_values(metadata, string_schema)
         )
 
         assert is_valid is True
@@ -1707,8 +1863,10 @@ class TestMetadataValidator:
             "optional_array_boolean": [True, False],
         }
 
-        is_valid, errors, normalized_data = validator.validate_and_normalize_metadata_values(
-            metadata, required_field_schema
+        is_valid, errors, normalized_data = (
+            validator.validate_and_normalize_metadata_values(
+                metadata, required_field_schema
+            )
         )
 
         assert is_valid is True
@@ -1718,7 +1876,9 @@ class TestMetadataValidator:
         assert normalized_data["required_float"] == 3.14
         assert normalized_data["required_boolean"] is True
 
-    def test_required_field_validation_missing_fields(self, validator, required_field_schema):
+    def test_required_field_validation_missing_fields(
+        self, validator, required_field_schema
+    ):
         """Test validation with missing required fields."""
         metadata = {
             "required_string": "test_value",
@@ -1729,8 +1889,10 @@ class TestMetadataValidator:
             "required_array_string": ["item1", "item2"],
         }
 
-        is_valid, errors, normalized_data = validator.validate_and_normalize_metadata_values(
-            metadata, required_field_schema
+        is_valid, errors, normalized_data = (
+            validator.validate_and_normalize_metadata_values(
+                metadata, required_field_schema
+            )
         )
 
         assert is_valid is False
@@ -1738,7 +1900,9 @@ class TestMetadataValidator:
         error_messages = [error["error"] for error in errors]
         assert any("required_integer" in msg for msg in error_messages)
 
-    def test_required_field_validation_empty_values(self, validator, required_field_schema):
+    def test_required_field_validation_empty_values(
+        self, validator, required_field_schema
+    ):
         """Test validation with empty values for required fields."""
         metadata = {
             "required_string": "",
@@ -1749,8 +1913,10 @@ class TestMetadataValidator:
             "required_array_string": [],
         }
 
-        is_valid, errors, normalized_data = validator.validate_and_normalize_metadata_values(
-            metadata, required_field_schema
+        is_valid, errors, normalized_data = (
+            validator.validate_and_normalize_metadata_values(
+                metadata, required_field_schema
+            )
         )
 
         assert is_valid is False
@@ -1759,7 +1925,9 @@ class TestMetadataValidator:
         assert any("required_string" in msg for msg in error_messages)
         assert any("required_array_string" in msg for msg in error_messages)
 
-    def test_required_field_validation_null_values(self, validator, required_field_schema):
+    def test_required_field_validation_null_values(
+        self, validator, required_field_schema
+    ):
         """Test validation with null values for required fields."""
         metadata = {
             "required_string": None,
@@ -1770,8 +1938,10 @@ class TestMetadataValidator:
             "required_array_string": ["item1", "item2"],
         }
 
-        is_valid, errors, normalized_data = validator.validate_and_normalize_metadata_values(
-            metadata, required_field_schema
+        is_valid, errors, normalized_data = (
+            validator.validate_and_normalize_metadata_values(
+                metadata, required_field_schema
+            )
         )
 
         assert is_valid is False
@@ -1779,7 +1949,9 @@ class TestMetadataValidator:
         error_messages = [error["error"] for error in errors]
         assert any("required_string" in msg for msg in error_messages)
 
-    def test_required_field_validation_type_errors(self, validator, required_field_schema):
+    def test_required_field_validation_type_errors(
+        self, validator, required_field_schema
+    ):
         """Test validation with type errors for required fields."""
         metadata = {
             "required_string": "test_value",
@@ -1787,11 +1959,13 @@ class TestMetadataValidator:
             "required_float": 3.14,
             "required_boolean": True,
             "required_datetime": "2024-01-15T10:30:00Z",
-            "required_array_string": ["item1", "item2"]
+            "required_array_string": ["item1", "item2"],
         }
 
-        is_valid, errors, normalized_data = validator.validate_and_normalize_metadata_values(
-            metadata, required_field_schema
+        is_valid, errors, normalized_data = (
+            validator.validate_and_normalize_metadata_values(
+                metadata, required_field_schema
+            )
         )
 
         assert is_valid is False
@@ -1805,11 +1979,13 @@ class TestMetadataValidator:
             "required_float": "not_a_float",
             "required_boolean": True,
             "required_datetime": "2024-01-15T10:30:00Z",
-            "required_array_string": ["item1", "item2"]
+            "required_array_string": ["item1", "item2"],
         }
 
-        is_valid2, errors2, normalized_data2 = validator.validate_and_normalize_metadata_values(
-            metadata2, required_field_schema
+        is_valid2, errors2, normalized_data2 = (
+            validator.validate_and_normalize_metadata_values(
+                metadata2, required_field_schema
+            )
         )
 
         assert is_valid2 is False
@@ -1817,7 +1993,9 @@ class TestMetadataValidator:
         error_messages2 = [error["error"] for error in errors2]
         assert any("required_float" in msg for msg in error_messages2)
 
-    def test_required_field_validation_invalid_boolean(self, validator, required_field_schema):
+    def test_required_field_validation_invalid_boolean(
+        self, validator, required_field_schema
+    ):
         """Test validation with invalid boolean values."""
         metadata = {
             "required_string": "test_value",
@@ -1825,11 +2003,13 @@ class TestMetadataValidator:
             "required_float": 3.14,
             "required_boolean": "maybe",
             "required_datetime": "2024-01-15T10:30:00Z",
-            "required_array_string": ["item1", "item2"]
+            "required_array_string": ["item1", "item2"],
         }
 
-        is_valid, errors, normalized_data = validator.validate_and_normalize_metadata_values(
-            metadata, required_field_schema
+        is_valid, errors, normalized_data = (
+            validator.validate_and_normalize_metadata_values(
+                metadata, required_field_schema
+            )
         )
 
         assert is_valid is False
@@ -1837,7 +2017,9 @@ class TestMetadataValidator:
         error_messages = [error["error"] for error in errors]
         assert any("required_boolean" in msg for msg in error_messages)
 
-    def test_required_field_validation_invalid_datetime(self, validator, required_field_schema):
+    def test_required_field_validation_invalid_datetime(
+        self, validator, required_field_schema
+    ):
         """Test validation with invalid datetime format."""
         metadata = {
             "required_string": "test_value",
@@ -1845,11 +2027,13 @@ class TestMetadataValidator:
             "required_float": 3.14,
             "required_boolean": True,
             "required_datetime": "invalid_date",
-            "required_array_string": ["item1", "item2"]
+            "required_array_string": ["item1", "item2"],
         }
 
-        is_valid, errors, normalized_data = validator.validate_and_normalize_metadata_values(
-            metadata, required_field_schema
+        is_valid, errors, normalized_data = (
+            validator.validate_and_normalize_metadata_values(
+                metadata, required_field_schema
+            )
         )
 
         assert is_valid is False
@@ -1857,7 +2041,9 @@ class TestMetadataValidator:
         error_messages = [error["error"] for error in errors]
         assert any("required_datetime" in msg for msg in error_messages)
 
-    def test_required_field_validation_array_type_errors(self, validator, required_field_schema):
+    def test_required_field_validation_array_type_errors(
+        self, validator, required_field_schema
+    ):
         """Test validation with wrong types in arrays."""
         metadata = {
             "required_string": "test_value",
@@ -1865,11 +2051,13 @@ class TestMetadataValidator:
             "required_float": 3.14,
             "required_boolean": True,
             "required_datetime": "2024-01-15T10:30:00Z",
-            "required_array_string": [1, 2, 3]
+            "required_array_string": [1, 2, 3],
         }
 
-        is_valid, errors, normalized_data = validator.validate_and_normalize_metadata_values(
-            metadata, required_field_schema
+        is_valid, errors, normalized_data = (
+            validator.validate_and_normalize_metadata_values(
+                metadata, required_field_schema
+            )
         )
 
         assert is_valid is False
@@ -1877,7 +2065,9 @@ class TestMetadataValidator:
         error_messages = [error["error"] for error in errors]
         assert any("required_array_string" in msg for msg in error_messages)
 
-    def test_required_field_validation_array_length_violation(self, validator, required_field_schema):
+    def test_required_field_validation_array_length_violation(
+        self, validator, required_field_schema
+    ):
         """Test validation with array length violations."""
         metadata = {
             "required_string": "test_value",
@@ -1885,11 +2075,25 @@ class TestMetadataValidator:
             "required_float": 3.14,
             "required_boolean": True,
             "required_datetime": "2024-01-15T10:30:00Z",
-            "required_array_string": ["item1", "item2", "item3", "item4", "item5", "item6", "item7", "item8", "item9", "item10", "item11"]
+            "required_array_string": [
+                "item1",
+                "item2",
+                "item3",
+                "item4",
+                "item5",
+                "item6",
+                "item7",
+                "item8",
+                "item9",
+                "item10",
+                "item11",
+            ],
         }
 
-        is_valid, errors, normalized_data = validator.validate_and_normalize_metadata_values(
-            metadata, required_field_schema
+        is_valid, errors, normalized_data = (
+            validator.validate_and_normalize_metadata_values(
+                metadata, required_field_schema
+            )
         )
 
         assert is_valid is False
@@ -1897,7 +2101,9 @@ class TestMetadataValidator:
         error_messages = [error["error"] for error in errors]
         assert any("required_array_string" in msg for msg in error_messages)
 
-    def test_required_field_validation_string_length_violation(self, validator, required_field_schema):
+    def test_required_field_validation_string_length_violation(
+        self, validator, required_field_schema
+    ):
         """Test validation with string length violations."""
         metadata = {
             "required_string": "x" * 101,
@@ -1905,11 +2111,13 @@ class TestMetadataValidator:
             "required_float": 3.14,
             "required_boolean": True,
             "required_datetime": "2024-01-15T10:30:00Z",
-            "required_array_string": ["item1", "item2"]
+            "required_array_string": ["item1", "item2"],
         }
 
-        is_valid, errors, normalized_data = validator.validate_and_normalize_metadata_values(
-            metadata, required_field_schema
+        is_valid, errors, normalized_data = (
+            validator.validate_and_normalize_metadata_values(
+                metadata, required_field_schema
+            )
         )
 
         assert is_valid is False
@@ -1917,7 +2125,9 @@ class TestMetadataValidator:
         error_messages = [error["error"] for error in errors]
         assert any("required_string" in msg for msg in error_messages)
 
-    def test_required_field_validation_zero_values(self, validator, required_field_schema):
+    def test_required_field_validation_zero_values(
+        self, validator, required_field_schema
+    ):
         """Test validation with zero values for numeric fields."""
         metadata = {
             "required_string": "test",
@@ -1925,11 +2135,13 @@ class TestMetadataValidator:
             "required_float": 0.0,
             "required_boolean": True,
             "required_datetime": "2024-01-15T10:30:00Z",
-            "required_array_string": ["item1"]
+            "required_array_string": ["item1"],
         }
 
-        is_valid, errors, normalized_data = validator.validate_and_normalize_metadata_values(
-            metadata, required_field_schema
+        is_valid, errors, normalized_data = (
+            validator.validate_and_normalize_metadata_values(
+                metadata, required_field_schema
+            )
         )
 
         assert is_valid is True
@@ -1937,7 +2149,9 @@ class TestMetadataValidator:
         assert normalized_data["required_integer"] == 0
         assert normalized_data["required_float"] == 0.0
 
-    def test_required_field_validation_boolean_string_representations(self, validator, required_field_schema):
+    def test_required_field_validation_boolean_string_representations(
+        self, validator, required_field_schema
+    ):
         """Test validation with boolean string representations."""
         metadata = {
             "required_string": "test",
@@ -1945,18 +2159,22 @@ class TestMetadataValidator:
             "required_float": 3.14,
             "required_boolean": "true",
             "required_datetime": "2024-01-15T10:30:00Z",
-            "required_array_string": ["item1"]
+            "required_array_string": ["item1"],
         }
 
-        is_valid, errors, normalized_data = validator.validate_and_normalize_metadata_values(
-            metadata, required_field_schema
+        is_valid, errors, normalized_data = (
+            validator.validate_and_normalize_metadata_values(
+                metadata, required_field_schema
+            )
         )
 
         assert is_valid is True
         assert len(errors) == 0
         assert normalized_data["required_boolean"] is True
 
-    def test_required_field_validation_maximum_length_boundaries(self, validator, required_field_schema):
+    def test_required_field_validation_maximum_length_boundaries(
+        self, validator, required_field_schema
+    ):
         """Test validation with maximum length boundaries."""
         metadata = {
             "required_string": "x" * 100,
@@ -1964,11 +2182,24 @@ class TestMetadataValidator:
             "required_float": 3.14,
             "required_boolean": True,
             "required_datetime": "2024-01-15T10:30:00Z",
-            "required_array_string": ["item1", "item2", "item3", "item4", "item5", "item6", "item7", "item8", "item9", "item10"]
+            "required_array_string": [
+                "item1",
+                "item2",
+                "item3",
+                "item4",
+                "item5",
+                "item6",
+                "item7",
+                "item8",
+                "item9",
+                "item10",
+            ],
         }
 
-        is_valid, errors, normalized_data = validator.validate_and_normalize_metadata_values(
-            metadata, required_field_schema
+        is_valid, errors, normalized_data = (
+            validator.validate_and_normalize_metadata_values(
+                metadata, required_field_schema
+            )
         )
 
         assert is_valid is True
@@ -1976,7 +2207,9 @@ class TestMetadataValidator:
         assert len(normalized_data["required_string"]) == 100
         assert len(normalized_data["required_array_string"]) == 10
 
-    def test_required_field_validation_only_required_fields(self, validator, required_field_schema):
+    def test_required_field_validation_only_required_fields(
+        self, validator, required_field_schema
+    ):
         """Test validation with only required fields (no optional fields)."""
         metadata = {
             "required_string": "test_value",
@@ -1984,11 +2217,13 @@ class TestMetadataValidator:
             "required_float": 3.14,
             "required_boolean": True,
             "required_datetime": "2024-01-15T10:30:00Z",
-            "required_array_string": ["item1"]
+            "required_array_string": ["item1"],
         }
 
-        is_valid, errors, normalized_data = validator.validate_and_normalize_metadata_values(
-            metadata, required_field_schema
+        is_valid, errors, normalized_data = (
+            validator.validate_and_normalize_metadata_values(
+                metadata, required_field_schema
+            )
         )
 
         assert is_valid is True
@@ -1999,7 +2234,10 @@ class TestMetadataValidator:
         assert "required_boolean" in normalized_data
         assert "required_datetime" in normalized_data
         assert "required_array_string" in normalized_data
-        assert "optional_string" not in normalized_data or normalized_data["optional_string"] is None
+        assert (
+            "optional_string" not in normalized_data
+            or normalized_data["optional_string"] is None
+        )
 
     # ============================================================================
     # Edge Cases and Error Handling Tests
@@ -2013,8 +2251,8 @@ class TestMetadataValidator:
             "another_unknown": 123,
         }
 
-        is_valid, errors, normalized_data = validator.validate_and_normalize_metadata_values(
-            metadata, array_schema
+        is_valid, errors, normalized_data = (
+            validator.validate_and_normalize_metadata_values(metadata, array_schema)
         )
 
         assert is_valid is False
@@ -2028,8 +2266,8 @@ class TestMetadataValidator:
         """Test validation with None schema."""
         metadata = {"title": "test"}
 
-        is_valid, errors, normalized_data = validator.validate_and_normalize_metadata_values(
-            metadata, None
+        is_valid, errors, normalized_data = (
+            validator.validate_and_normalize_metadata_values(metadata, None)
         )
 
         assert isinstance(is_valid, bool)
@@ -2039,8 +2277,8 @@ class TestMetadataValidator:
         empty_schema = MetadataSchema(schema=[])
         metadata = {"title": "test"}
 
-        is_valid, errors, normalized_data = validator.validate_and_normalize_metadata_values(
-            metadata, empty_schema
+        is_valid, errors, normalized_data = (
+            validator.validate_and_normalize_metadata_values(metadata, empty_schema)
         )
 
         assert is_valid is False
@@ -2059,8 +2297,8 @@ class TestMetadataValidator:
             "scores": large_scores,
         }
 
-        is_valid, errors, normalized_data = validator.validate_and_normalize_metadata_values(
-            metadata, array_schema
+        is_valid, errors, normalized_data = (
+            validator.validate_and_normalize_metadata_values(metadata, array_schema)
         )
 
         assert is_valid is False
@@ -2071,13 +2309,13 @@ class TestMetadataValidator:
         import math
 
         metadata = {
-            "rating": float('nan'),
-            "score": float('inf'),
-            "percentage": float('-inf'),
+            "rating": float("nan"),
+            "score": float("inf"),
+            "percentage": float("-inf"),
         }
 
-        is_valid, errors, normalized_data = validator.validate_and_normalize_metadata_values(
-            metadata, numeric_schema
+        is_valid, errors, normalized_data = (
+            validator.validate_and_normalize_metadata_values(metadata, numeric_schema)
         )
 
         assert is_valid is False or is_valid is True
@@ -2099,8 +2337,8 @@ class TestMetadataValidator:
         config.metadata.max_string_length = 65535
 
         result = validate_metadata_config(config)
-        assert hasattr(result, 'max_array_length')
-        assert hasattr(result, 'max_string_length')
+        assert hasattr(result, "max_array_length")
+        assert hasattr(result, "max_string_length")
         assert result is config
 
     def test_validate_metadata_config_failure(self):
@@ -2111,8 +2349,8 @@ class TestMetadataValidator:
 
         try:
             result = validate_metadata_config(config)
-            assert hasattr(result, 'max_array_length')
-            assert hasattr(result, 'max_string_length')
+            assert hasattr(result, "max_array_length")
+            assert hasattr(result, "max_string_length")
         except MetadataConfigError:
             pass
 
@@ -2173,11 +2411,11 @@ class TestMetadataValidator:
             "flags": [True, True, False],
             "title": "Nested Array Test",
             "rating": 4.5,
-            "is_public": True
+            "is_public": True,
         }
 
-        is_valid, errors, normalized_data = validator.validate_and_normalize_metadata_values(
-            metadata, array_schema
+        is_valid, errors, normalized_data = (
+            validator.validate_and_normalize_metadata_values(metadata, array_schema)
         )
 
         assert is_valid is False
@@ -2192,8 +2430,8 @@ class TestMetadataValidator:
             "flags": [True, "false", 1, None],  # Mixed types
         }
 
-        is_valid, errors, normalized_data = validator.validate_and_normalize_metadata_values(
-            metadata, array_schema
+        is_valid, errors, normalized_data = (
+            validator.validate_and_normalize_metadata_values(metadata, array_schema)
         )
 
         assert is_valid is False
@@ -2203,9 +2441,9 @@ class TestMetadataValidator:
         """Test boolean validation with edge case values."""
         metadata = {
             "is_public": "yes",  # Should convert to True
-            "is_active": "no",   # Should convert to False
+            "is_active": "no",  # Should convert to False
             "is_verified": "1",  # Should convert to True
-            "is_premium": "0",   # Should convert to False
+            "is_premium": "0",  # Should convert to False
             "is_archived": "enabled",  # Should convert to True
             "has_attachments": "disabled",  # Should convert to False
             "is_featured": "active",  # Should convert to True
@@ -2213,8 +2451,8 @@ class TestMetadataValidator:
             "flags": ["yes", "no", "1", "0"],
         }
 
-        is_valid, errors, normalized_data = validator.validate_and_normalize_metadata_values(
-            metadata, boolean_schema
+        is_valid, errors, normalized_data = (
+            validator.validate_and_normalize_metadata_values(metadata, boolean_schema)
         )
 
         assert isinstance(is_valid, bool)
@@ -2224,12 +2462,12 @@ class TestMetadataValidator:
         metadata = {
             "created_date": "2024-01-15T10:30:00+05:00",  # With timezone
             "updated_date": "2024-06-20T14:45:00-08:00",  # With timezone
-            "published_date": "2024-02-01T09:00:00Z",     # UTC
-            "expiry_date": "2025-12-31T23:59:59.999Z",   # With milliseconds
+            "published_date": "2024-02-01T09:00:00Z",  # UTC
+            "expiry_date": "2025-12-31T23:59:59.999Z",  # With milliseconds
         }
 
-        is_valid, errors, normalized_data = validator.validate_and_normalize_metadata_values(
-            metadata, datetime_schema
+        is_valid, errors, normalized_data = (
+            validator.validate_and_normalize_metadata_values(metadata, datetime_schema)
         )
 
         assert is_valid is True
@@ -2243,8 +2481,8 @@ class TestMetadataValidator:
             "updated_date": "2024-06-20T14:45:00-99:00",  # Invalid timezone
         }
 
-        is_valid, errors, normalized_data = validator.validate_and_normalize_metadata_values(
-            metadata, datetime_schema
+        is_valid, errors, normalized_data = (
+            validator.validate_and_normalize_metadata_values(metadata, datetime_schema)
         )
 
         assert isinstance(is_valid, bool)
@@ -2252,18 +2490,18 @@ class TestMetadataValidator:
     def test_numeric_metadata_extreme_values(self, validator, numeric_schema):
         """Test numeric validation with extreme values."""
         metadata = {
-            "pages": float('inf'),  # Infinity
-            "word_count": float('-inf'),  # Negative infinity
+            "pages": float("inf"),  # Infinity
+            "word_count": float("-inf"),  # Negative infinity
             "quantity": 1e308,  # Very large number
             "rating": 1e-308,  # Very small number
-            "score": float('nan'),  # NaN
+            "score": float("nan"),  # NaN
             "percentage": -1e308,  # Very large negative number
             "file_size": 0.0,  # Zero
             "price": -0.0,  # Negative zero
         }
 
-        is_valid, errors, normalized_data = validator.validate_and_normalize_metadata_values(
-            metadata, numeric_schema
+        is_valid, errors, normalized_data = (
+            validator.validate_and_normalize_metadata_values(metadata, numeric_schema)
         )
 
         assert isinstance(is_valid, bool)
@@ -2272,13 +2510,13 @@ class TestMetadataValidator:
         """Test numeric validation with overflow values."""
         metadata = {
             "pages": 2**63,  # Very large integer
-            "word_count": -2**63,  # Very large negative integer
+            "word_count": -(2**63),  # Very large negative integer
             "quantity": 1e100,  # Very large float
             "rating": -1e100,  # Very large negative float
         }
 
-        is_valid, errors, normalized_data = validator.validate_and_normalize_metadata_values(
-            metadata, numeric_schema
+        is_valid, errors, normalized_data = (
+            validator.validate_and_normalize_metadata_values(metadata, numeric_schema)
         )
 
         assert isinstance(is_valid, bool)
@@ -2288,13 +2526,13 @@ class TestMetadataValidator:
         metadata = {
             "title": "Title with \n newline and \t tab",
             "author": "Author with \r carriage return",
-            "description": "Description with \x00 null byte and \x1F control chars",
+            "description": "Description with \x00 null byte and \x1f control chars",
             "category": "Category with \b backspace",
             "tags": ["tag\nwith\nnewlines", "tag\twith\ttabs", "tag\rwith\rreturns"],
         }
 
-        is_valid, errors, normalized_data = validator.validate_and_normalize_metadata_values(
-            metadata, string_schema
+        is_valid, errors, normalized_data = (
+            validator.validate_and_normalize_metadata_values(metadata, string_schema)
         )
 
         assert isinstance(is_valid, bool)
@@ -2309,8 +2547,8 @@ class TestMetadataValidator:
             "tags": ["emoji", "🚀", "©", "🇺🇸", "♥", "★"],
         }
 
-        is_valid, errors, normalized_data = validator.validate_and_normalize_metadata_values(
-            metadata, string_schema
+        is_valid, errors, normalized_data = (
+            validator.validate_and_normalize_metadata_values(metadata, string_schema)
         )
 
         assert is_valid is True
@@ -2328,15 +2566,17 @@ class TestMetadataValidator:
             "tags": ["html", "entities", "&amp;", "&lt;", "&gt;"],
         }
 
-        is_valid, errors, normalized_data = validator.validate_and_normalize_metadata_values(
-            metadata, string_schema
+        is_valid, errors, normalized_data = (
+            validator.validate_and_normalize_metadata_values(metadata, string_schema)
         )
 
         assert is_valid is True
         assert len(errors) == 0
         assert "&amp;" in normalized_data["title"]
 
-    def test_required_field_validation_whitespace_only(self, validator, required_field_schema):
+    def test_required_field_validation_whitespace_only(
+        self, validator, required_field_schema
+    ):
         """Test validation with whitespace-only strings for required fields."""
         metadata = {
             "required_string": "   ",
@@ -2344,16 +2584,20 @@ class TestMetadataValidator:
             "required_float": 3.14,
             "required_boolean": True,
             "required_datetime": "2024-01-15T10:30:00Z",
-            "required_array_string": ["   ", "  \t  ", "  \n  "]
+            "required_array_string": ["   ", "  \t  ", "  \n  "],
         }
 
-        is_valid, errors, normalized_data = validator.validate_and_normalize_metadata_values(
-            metadata, required_field_schema
+        is_valid, errors, normalized_data = (
+            validator.validate_and_normalize_metadata_values(
+                metadata, required_field_schema
+            )
         )
 
         assert isinstance(is_valid, bool)
 
-    def test_required_field_validation_numeric_edge_cases(self, validator, required_field_schema):
+    def test_required_field_validation_numeric_edge_cases(
+        self, validator, required_field_schema
+    ):
         """Test validation with numeric edge cases for required fields."""
         metadata = {
             "required_string": "test",
@@ -2361,11 +2605,13 @@ class TestMetadataValidator:
             "required_float": 0.0,
             "required_boolean": True,
             "required_datetime": "2024-01-15T10:30:00Z",
-            "required_array_string": ["test"]
+            "required_array_string": ["test"],
         }
 
-        is_valid, errors, normalized_data = validator.validate_and_normalize_metadata_values(
-            metadata, required_field_schema
+        is_valid, errors, normalized_data = (
+            validator.validate_and_normalize_metadata_values(
+                metadata, required_field_schema
+            )
         )
 
         assert is_valid is True
@@ -2383,8 +2629,8 @@ class TestMetadataValidator:
             "tags": ["Tag1", "TAG2", "tag3", "Tag_4"],
         }
 
-        is_valid, errors, normalized_data = validator.validate_and_normalize_metadata_values(
-            metadata, string_schema
+        is_valid, errors, normalized_data = (
+            validator.validate_and_normalize_metadata_values(metadata, string_schema)
         )
 
         assert is_valid is True
@@ -2400,8 +2646,8 @@ class TestMetadataValidator:
             "scores": [0.9, 0.8],
         }
 
-        is_valid, errors, normalized_data = validator.validate_and_normalize_metadata_values(
-            metadata, array_schema
+        is_valid, errors, normalized_data = (
+            validator.validate_and_normalize_metadata_values(metadata, array_schema)
         )
 
         assert is_valid is True
@@ -2419,19 +2665,11 @@ class TestMetadataValidator:
             "title": "Deep Nesting Test",
             "rating": 4.5,
             "is_public": True,
-            "nested_object": {
-                "level1": {
-                    "level2": {
-                        "level3": {
-                            "value": "deep"
-                        }
-                    }
-                }
-            }
+            "nested_object": {"level1": {"level2": {"level3": {"value": "deep"}}}},
         }
 
-        is_valid, errors, normalized_data = validator.validate_and_normalize_metadata_values(
-            metadata, array_schema
+        is_valid, errors, normalized_data = (
+            validator.validate_and_normalize_metadata_values(metadata, array_schema)
         )
 
         assert is_valid is False
@@ -2453,11 +2691,11 @@ class TestMetadataValidator:
             "title": "Circular Reference Test",
             "rating": 4.5,
             "is_public": True,
-            "circular_field": circular_list
+            "circular_field": circular_list,
         }
 
-        is_valid, errors, normalized_data = validator.validate_and_normalize_metadata_values(
-            metadata, array_schema
+        is_valid, errors, normalized_data = (
+            validator.validate_and_normalize_metadata_values(metadata, array_schema)
         )
 
         assert is_valid is False
@@ -2478,13 +2716,15 @@ class TestMetadataValidator:
             "tags": ["normal", "tags"],
         }
 
-        is_valid, errors, normalized_data = validator.validate_and_normalize_metadata_values(
-            metadata, string_schema
+        is_valid, errors, normalized_data = (
+            validator.validate_and_normalize_metadata_values(metadata, string_schema)
         )
 
         assert isinstance(is_valid, bool)
 
-    def test_metadata_validation_performance_large_arrays(self, validator, array_schema):
+    def test_metadata_validation_performance_large_arrays(
+        self, validator, array_schema
+    ):
         """Test validation with large arrays to check performance."""
         large_array = [f"tag_{i}" for i in range(10000)]
 
@@ -2495,11 +2735,11 @@ class TestMetadataValidator:
             "flags": [True, True, False],
             "title": "Large Array Test",
             "rating": 4.5,
-            "is_public": True
+            "is_public": True,
         }
 
-        is_valid, errors, normalized_data = validator.validate_and_normalize_metadata_values(
-            metadata, array_schema
+        is_valid, errors, normalized_data = (
+            validator.validate_and_normalize_metadata_values(metadata, array_schema)
         )
 
         assert isinstance(is_valid, bool)
@@ -2521,11 +2761,13 @@ class TestMetadataValidator:
                     "flags": [True if thread_id % 2 == 0 else False],
                     "title": f"Thread {thread_id} Document",
                     "rating": 4.0 + thread_id * 0.1,
-                    "is_public": True
+                    "is_public": True,
                 }
 
-                is_valid, error_list, normalized_data = validator.validate_and_normalize_metadata_values(
-                    metadata, array_schema
+                is_valid, error_list, normalized_data = (
+                    validator.validate_and_normalize_metadata_values(
+                        metadata, array_schema
+                    )
                 )
 
                 results.append((thread_id, is_valid))
@@ -2548,13 +2790,16 @@ class TestMetadataValidator:
         assert all(is_valid for _, is_valid in results)
         assert len(errors) == 0
 
-    def test_metadata_validation_error_message_clarity(self, validator, required_field_schema):
+    def test_metadata_validation_error_message_clarity(
+        self, validator, required_field_schema
+    ):
         """Test that error messages are clear and helpful."""
-        metadata = {
-        }
+        metadata = {}
 
-        is_valid, errors, normalized_data = validator.validate_and_normalize_metadata_values(
-            metadata, required_field_schema
+        is_valid, errors, normalized_data = (
+            validator.validate_and_normalize_metadata_values(
+                metadata, required_field_schema
+            )
         )
 
         assert is_valid is False
@@ -2565,7 +2810,9 @@ class TestMetadataValidator:
             assert len(message) > 0
             assert "required" in message.lower() or "missing" in message.lower()
 
-    def test_metadata_validation_error_field_identification(self, validator, required_field_schema):
+    def test_metadata_validation_error_field_identification(
+        self, validator, required_field_schema
+    ):
         """Test that errors correctly identify the problematic field."""
         metadata = {
             "required_string": "",
@@ -2573,22 +2820,32 @@ class TestMetadataValidator:
             "required_float": 3.14,
             "required_boolean": True,
             "required_datetime": "2024-01-15T10:30:00Z",
-            "required_array_string": [1, 2, 3]
+            "required_array_string": [1, 2, 3],
         }
 
-        is_valid, errors, normalized_data = validator.validate_and_normalize_metadata_values(
-            metadata, required_field_schema
+        is_valid, errors, normalized_data = (
+            validator.validate_and_normalize_metadata_values(
+                metadata, required_field_schema
+            )
         )
 
         assert is_valid is False
         assert len(errors) > 0
 
         error_fields = [error.get("field", "") for error in errors]
-        assert "required_string" in error_fields or any("required_string" in str(error) for error in errors)
-        assert "required_integer" in error_fields or any("required_integer" in str(error) for error in errors)
-        assert "required_array_string" in error_fields or any("required_array_string" in str(error) for error in errors)
+        assert "required_string" in error_fields or any(
+            "required_string" in str(error) for error in errors
+        )
+        assert "required_integer" in error_fields or any(
+            "required_integer" in str(error) for error in errors
+        )
+        assert "required_array_string" in error_fields or any(
+            "required_array_string" in str(error) for error in errors
+        )
 
-    def test_metadata_validation_normalization_consistency(self, validator, array_schema):
+    def test_metadata_validation_normalization_consistency(
+        self, validator, array_schema
+    ):
         """Test that normalization is consistent across multiple calls."""
         metadata = {
             "tags": ["tag1", "tag2"],
@@ -2597,15 +2854,15 @@ class TestMetadataValidator:
             "flags": ["true", "false"],
             "title": "Normalization Test",
             "rating": "4.5",
-            "is_public": "true"
+            "is_public": "true",
         }
 
-        is_valid1, errors1, normalized_data1 = validator.validate_and_normalize_metadata_values(
-            metadata, array_schema
+        is_valid1, errors1, normalized_data1 = (
+            validator.validate_and_normalize_metadata_values(metadata, array_schema)
         )
 
-        is_valid2, errors2, normalized_data2 = validator.validate_and_normalize_metadata_values(
-            metadata, array_schema
+        is_valid2, errors2, normalized_data2 = (
+            validator.validate_and_normalize_metadata_values(metadata, array_schema)
         )
 
         assert is_valid1 == is_valid2
@@ -2621,21 +2878,22 @@ class TestMetadataValidator:
     def test_metadata_validation_schema_evolution(self, validator):
         """Test metadata validation with schema evolution scenarios."""
         # Test schema evolution - adding new fields
-        evolved_schema = MetadataSchema(schema=[
-            MetadataField(name="title", type="string", required=True),
-            MetadataField(name="author", type="string", required=False),
-            MetadataField(name="category", type="string", required=False),
-            MetadataField(name="tags", type="array", array_type="string", required=False),
-        ])
+        evolved_schema = MetadataSchema(
+            schema=[
+                MetadataField(name="title", type="string", required=True),
+                MetadataField(name="author", type="string", required=False),
+                MetadataField(name="category", type="string", required=False),
+                MetadataField(
+                    name="tags", type="array", array_type="string", required=False
+                ),
+            ]
+        )
 
         # Test original metadata with evolved schema
-        metadata = {
-            "title": "Original Document",
-            "author": "John Smith"
-        }
+        metadata = {"title": "Original Document", "author": "John Smith"}
 
-        is_valid, errors, normalized_data = validator.validate_and_normalize_metadata_values(
-            metadata, evolved_schema
+        is_valid, errors, normalized_data = (
+            validator.validate_and_normalize_metadata_values(metadata, evolved_schema)
         )
 
         assert is_valid is True
@@ -2657,14 +2915,14 @@ class TestMetadataValidator:
                     "title": "Policy Document",
                     "category": "Technical",
                     "description": "This is a Test Document",
-                    "author": "John Smith"
+                    "author": "John Smith",
                 },
                 "expected": {
                     "title": "policy document",
                     "category": "technical",
                     "description": "this is a test document",
-                    "author": "john smith"
-                }
+                    "author": "john smith",
+                },
             },
             {
                 "name": "All uppercase",
@@ -2672,14 +2930,14 @@ class TestMetadataValidator:
                     "title": "POLICY DOCUMENT",
                     "category": "TECHNICAL",
                     "description": "THIS IS A TEST DOCUMENT",
-                    "author": "JOHN SMITH"
+                    "author": "JOHN SMITH",
                 },
                 "expected": {
                     "title": "policy document",
                     "category": "technical",
                     "description": "this is a test document",
-                    "author": "john smith"
-                }
+                    "author": "john smith",
+                },
             },
             {
                 "name": "All lowercase",
@@ -2687,14 +2945,14 @@ class TestMetadataValidator:
                     "title": "policy document",
                     "category": "technical",
                     "description": "this is a test document",
-                    "author": "john smith"
+                    "author": "john smith",
                 },
                 "expected": {
                     "title": "policy document",
                     "category": "technical",
                     "description": "this is a test document",
-                    "author": "john smith"
-                }
+                    "author": "john smith",
+                },
             },
             {
                 "name": "Mixed case with special characters",
@@ -2702,14 +2960,14 @@ class TestMetadataValidator:
                     "title": "Policy & Claims (2024) - Special: $100",
                     "category": "Technical-Support",
                     "description": "This document contains: &, $, %, @, # symbols",
-                    "author": "José García"
+                    "author": "José García",
                 },
                 "expected": {
                     "title": "policy & claims (2024) - special: $100",
                     "category": "technical-support",
                     "description": "this document contains: &, $, %, @, # symbols",
-                    "author": "josé garcía"
-                }
+                    "author": "josé garcía",
+                },
             },
             {
                 "name": "Unicode characters",
@@ -2717,14 +2975,14 @@ class TestMetadataValidator:
                     "title": "政策文档 Policy Document",
                     "category": "技术 Technical",
                     "description": "这是一个测试文档 This is a test document",
-                    "author": "José García 何塞"
+                    "author": "José García 何塞",
                 },
                 "expected": {
                     "title": "政策文档 policy document",
                     "category": "技术 technical",
                     "description": "这是一个测试文档 this is a test document",
-                    "author": "josé garcía 何塞"
-                }
+                    "author": "josé garcía 何塞",
+                },
             },
             {
                 "name": "Numbers and special characters",
@@ -2732,14 +2990,14 @@ class TestMetadataValidator:
                     "title": "Document 2024 v2.1",
                     "category": "Technical-2024",
                     "description": "Version 2.1 of the document",
-                    "author": "John Smith Jr."
+                    "author": "John Smith Jr.",
                 },
                 "expected": {
                     "title": "document 2024 v2.1",
                     "category": "technical-2024",
                     "description": "version 2.1 of the document",
-                    "author": "john smith jr."
-                }
+                    "author": "john smith jr.",
+                },
             },
             {
                 "name": "Empty and whitespace strings",
@@ -2747,23 +3005,25 @@ class TestMetadataValidator:
                     "title": "  Policy Document  ",
                     "category": "  Technical  ",
                     "description": "  Description with spaces  ",
-                    "author": "  John Smith  "
+                    "author": "  John Smith  ",
                 },
                 "expected": {
                     "title": "policy document",
                     "category": "technical",
                     "description": "description with spaces",
-                    "author": "john smith"
-                }
-            }
+                    "author": "john smith",
+                },
+            },
         ]
 
         for test_case in test_cases:
             print(f"\n--- {test_case['name']} ---")
             print(f"Original: {test_case['metadata']}")
 
-            is_valid, errors, normalized_data = validator.validate_and_normalize_metadata_values(
-                test_case['metadata'], string_schema
+            is_valid, errors, normalized_data = (
+                validator.validate_and_normalize_metadata_values(
+                    test_case["metadata"], string_schema
+                )
             )
 
             print(f"Valid: {is_valid}")
@@ -2773,8 +3033,12 @@ class TestMetadataValidator:
                 # Verify all string values are lowercase
                 for key, value in normalized_data.items():
                     if isinstance(value, str):
-                        assert value == value.lower(), f"String value '{value}' is not lowercase"
-                        assert value == test_case['expected'][key], f"Expected '{test_case['expected'][key]}', got '{value}'"
+                        assert value == value.lower(), (
+                            f"String value '{value}' is not lowercase"
+                        )
+                        assert value == test_case["expected"][key], (
+                            f"Expected '{test_case['expected'][key]}', got '{value}'"
+                        )
 
                 print("✅ All string values converted to lowercase")
             else:
@@ -2787,76 +3051,78 @@ class TestMetadataValidator:
                 "name": "Mixed case array elements",
                 "metadata": {
                     "tags": ["Urgent", "Important", "Policy"],
-                    "title": "Test Document"
+                    "title": "Test Document",
                 },
                 "expected": {
                     "tags": ["urgent", "important", "policy"],
-                    "title": "test document"
-                }
+                    "title": "test document",
+                },
             },
             {
                 "name": "All uppercase array elements",
                 "metadata": {
                     "tags": ["URGENT", "IMPORTANT", "POLICY"],
-                    "title": "Test Document"
+                    "title": "Test Document",
                 },
                 "expected": {
                     "tags": ["urgent", "important", "policy"],
-                    "title": "test document"
-                }
+                    "title": "test document",
+                },
             },
             {
                 "name": "Mixed case with special characters",
                 "metadata": {
                     "tags": ["Urgent!", "Important?", "Policy#"],
-                    "title": "Test Document"
+                    "title": "Test Document",
                 },
                 "expected": {
                     "tags": ["urgent!", "important?", "policy#"],
-                    "title": "test document"
-                }
+                    "title": "test document",
+                },
             },
             {
                 "name": "Unicode array elements",
                 "metadata": {
                     "tags": ["紧急 Urgent", "重要 Important", "政策 Policy"],
-                    "title": "Test Document"
+                    "title": "Test Document",
                 },
                 "expected": {
                     "tags": ["紧急 urgent", "重要 important", "政策 policy"],
-                    "title": "test document"
-                }
+                    "title": "test document",
+                },
             },
             {
                 "name": "Numbers and special characters in arrays",
                 "metadata": {
                     "tags": ["v1.0", "v2.1", "beta-test"],
-                    "title": "Test Document"
+                    "title": "Test Document",
                 },
                 "expected": {
                     "tags": ["v1.0", "v2.1", "beta-test"],
-                    "title": "test document"
-                }
+                    "title": "test document",
+                },
             },
             {
                 "name": "Empty and whitespace array elements",
                 "metadata": {
                     "tags": ["  Urgent  ", "  Important  "],
-                    "title": "Test Document"
+                    "title": "Test Document",
                 },
                 "expected": {
                     "tags": ["  urgent  ", "  important  "],
-                    "title": "test document"
-                }
-            }
+                    "title": "test document",
+                },
+            },
         ]
 
         for test_case in test_cases:
             print(f"\n--- {test_case['name']} ---")
             print(f"Original: {test_case['metadata']}")
 
-            is_valid, errors, normalized_data = validator.validate_and_normalize_metadata_values(
-                test_case['metadata'], array_schema
+            is_valid, errors, normalized_data = (
+                validator.validate_and_normalize_metadata_values(
+                    test_case["metadata"], array_schema
+                )
             )
 
             print(f"Valid: {is_valid}")
@@ -2866,16 +3132,24 @@ class TestMetadataValidator:
                 # Verify all string values and array elements are lowercase
                 for key, value in normalized_data.items():
                     if isinstance(value, str):
-                        assert value == value.lower(), f"String value '{value}' is not lowercase"
-                        assert value == test_case['expected'][key], f"Expected '{test_case['expected'][key]}', got '{value}'"
+                        assert value == value.lower(), (
+                            f"String value '{value}' is not lowercase"
+                        )
+                        assert value == test_case["expected"][key], (
+                            f"Expected '{test_case['expected'][key]}', got '{value}'"
+                        )
                     elif isinstance(value, list):
                         for item in value:
                             if isinstance(item, str):
-                                assert item == item.lower(), f"Array item '{item}' is not lowercase"
+                                assert item == item.lower(), (
+                                    f"Array item '{item}' is not lowercase"
+                                )
 
                 # Verify array elements match expected
-                if 'tags' in normalized_data:
-                    assert normalized_data['tags'] == test_case['expected']['tags'], f"Expected {test_case['expected']['tags']}, got {normalized_data['tags']}"
+                if "tags" in normalized_data:
+                    assert normalized_data["tags"] == test_case["expected"]["tags"], (
+                        f"Expected {test_case['expected']['tags']}, got {normalized_data['tags']}"
+                    )
 
                 print("✅ All string values and array elements converted to lowercase")
             else:
@@ -2888,52 +3162,54 @@ class TestMetadataValidator:
                 "name": "Very long mixed case string",
                 "metadata": {
                     "title": "A" * 500 + "B" * 500 + "C" * 500,
-                    "description": "Test description"
-                }
+                    "description": "Test description",
+                },
             },
             {
                 "name": "Strings with only numbers and special characters",
                 "metadata": {
                     "title": "1234567890!@#$%^&*()_+-=[]{}|;':\",./<>?",
-                    "description": "Test description"
-                }
+                    "description": "Test description",
+                },
             },
             {
                 "name": "Unicode mixed case",
                 "metadata": {
                     "title": "政策文档 Policy Document 文档",
-                    "description": "Test description"
-                }
+                    "description": "Test description",
+                },
             },
             {
                 "name": "Control characters",
                 "metadata": {
                     "title": "Test\x00\x01\x02Document",
-                    "description": "Test description"
-                }
+                    "description": "Test description",
+                },
             },
             {
                 "name": "Emoji and special Unicode",
                 "metadata": {
                     "title": "Test 🚀 Document 📄",
-                    "description": "Test description"
-                }
+                    "description": "Test description",
+                },
             },
             {
                 "name": "HTML entities",
                 "metadata": {
                     "title": "Test &amp; Document &lt; &gt;",
-                    "description": "Test description"
-                }
-            }
+                    "description": "Test description",
+                },
+            },
         ]
 
         for test_case in test_cases:
             print(f"\n--- {test_case['name']} ---")
             print(f"Original: {test_case['metadata']}")
 
-            is_valid, errors, normalized_data = validator.validate_and_normalize_metadata_values(
-                test_case['metadata'], string_schema
+            is_valid, errors, normalized_data = (
+                validator.validate_and_normalize_metadata_values(
+                    test_case["metadata"], string_schema
+                )
             )
 
             print(f"Valid: {is_valid}")
@@ -2941,9 +3217,11 @@ class TestMetadataValidator:
                 print(f"Normalized: {normalized_data}")
 
                 # Verify title is lowercase
-                original_title = test_case['metadata']['title']
-                normalized_title = normalized_data['title']
-                assert normalized_title == original_title.lower(), f"Expected '{original_title.lower()}', got '{normalized_title}'"
+                original_title = test_case["metadata"]["title"]
+                normalized_title = normalized_data["title"]
+                assert normalized_title == original_title.lower(), (
+                    f"Expected '{original_title.lower()}', got '{normalized_title}'"
+                )
 
                 print("✅ Correctly converted to lowercase")
             else:
@@ -2958,17 +3236,20 @@ class TestMetadataValidator:
         metadata = {"title": long_string, "description": "Test description"}
 
         import time
+
         start_time = time.time()
-        is_valid, errors, normalized_data = validator.validate_and_normalize_metadata_values(
-            metadata, string_schema
+        is_valid, errors, normalized_data = (
+            validator.validate_and_normalize_metadata_values(metadata, string_schema)
         )
         end_time = time.time()
 
-        print(f"Very long string (10k chars): {'✅ Passed' if is_valid else '❌ Failed'}")
+        print(
+            f"Very long string (10k chars): {'✅ Passed' if is_valid else '❌ Failed'}"
+        )
         print(f"Processing time: {end_time - start_time:.4f} seconds")
 
         if is_valid:
-            assert normalized_data['title'] == long_string.lower()
+            assert normalized_data["title"] == long_string.lower()
             print("✅ Correctly converted to lowercase")
 
         # Test with many fields
@@ -2980,8 +3261,8 @@ class TestMetadataValidator:
         many_fields["description"] = "Test description"
 
         start_time = time.time()
-        is_valid, errors, normalized_data = validator.validate_and_normalize_metadata_values(
-            many_fields, string_schema
+        is_valid, errors, normalized_data = (
+            validator.validate_and_normalize_metadata_values(many_fields, string_schema)
         )
         end_time = time.time()
 
@@ -2992,7 +3273,9 @@ class TestMetadataValidator:
             # Verify all string fields are lowercase
             for key, value in normalized_data.items():
                 if isinstance(value, str):
-                    assert value == value.lower(), f"Field '{key}' value '{value}' is not lowercase"
+                    assert value == value.lower(), (
+                        f"Field '{key}' value '{value}' is not lowercase"
+                    )
             print("✅ All string fields converted to lowercase")
 
     def test_case_insensitive_internationalization(self, validator, string_schema):
@@ -3004,72 +3287,82 @@ class TestMetadataValidator:
             {
                 "name": "Chinese characters",
                 "title": "政策文档 Policy Document",
-                "description": "这是一个测试文档 This is a test document"
+                "description": "这是一个测试文档 This is a test document",
             },
             {
                 "name": "Japanese characters",
                 "title": "ドキュメント Document",
-                "description": "これはテスト文書です This is a test document"
+                "description": "これはテスト文書です This is a test document",
             },
             {
                 "name": "Korean characters",
                 "title": "문서 Document",
-                "description": "이것은 테스트 문서입니다 This is a test document"
+                "description": "이것은 테스트 문서입니다 This is a test document",
             },
             {
                 "name": "Arabic characters",
                 "title": "وثيقة Document",
-                "description": "هذا مستند اختبار This is a test document"
+                "description": "هذا مستند اختبار This is a test document",
             },
             {
                 "name": "Russian characters",
                 "title": "Документ Document",
-                "description": "Это тестовый документ This is a test document"
+                "description": "Это тестовый документ This is a test document",
             },
             {
                 "name": "Greek characters",
                 "title": "Έγγραφο Document",
-                "description": "Αυτό είναι ένα έγγραφο δοκιμής This is a test document"
+                "description": "Αυτό είναι ένα έγγραφο δοκιμής This is a test document",
             },
             {
                 "name": "Mixed Unicode",
                 "title": "政策文档 Policy Document ドキュメント",
-                "description": "Mixed Unicode test document"
-            }
+                "description": "Mixed Unicode test document",
+            },
         ]
 
         for test_case in unicode_test_cases:
             print(f"\n--- {test_case['name']} ---")
             metadata = {
-                "title": test_case['title'],
-                "description": test_case['description']
+                "title": test_case["title"],
+                "description": test_case["description"],
             }
 
-            is_valid, errors, normalized_data = validator.validate_and_normalize_metadata_values(
-                metadata, string_schema
+            is_valid, errors, normalized_data = (
+                validator.validate_and_normalize_metadata_values(
+                    metadata, string_schema
+                )
             )
             print(f"Validation: {'✅ Passed' if is_valid else '❌ Failed'}")
 
             if is_valid:
                 # Verify title is lowercase
-                assert normalized_data['title'] == test_case['title'].lower()
+                assert normalized_data["title"] == test_case["title"].lower()
                 # Verify description is lowercase
-                assert normalized_data['description'] == test_case['description'].lower()
+                assert (
+                    normalized_data["description"] == test_case["description"].lower()
+                )
                 print("✅ Correctly handled Unicode and converted to lowercase")
             else:
                 print(f"Errors: {errors}")
 
     def test_case_insensitive_data_type_preservation(self, validator):
         """Test that non-string data types are preserved correctly during case-insensitive processing."""
-        schema = MetadataSchema(schema=[
-            MetadataField(name="title", type="string", required=True),
-            MetadataField(name="rating", type="float", required=False),
-            MetadataField(name="count", type="integer", required=False),
-            MetadataField(name="is_active", type="boolean", required=False),
-            MetadataField(name="created_date", type="datetime", required=False),
-            MetadataField(name="scores", type="array", array_type="float", required=False),
-            MetadataField(name="flags", type="array", array_type="boolean", required=False),
-        ])
+        schema = MetadataSchema(
+            schema=[
+                MetadataField(name="title", type="string", required=True),
+                MetadataField(name="rating", type="float", required=False),
+                MetadataField(name="count", type="integer", required=False),
+                MetadataField(name="is_active", type="boolean", required=False),
+                MetadataField(name="created_date", type="datetime", required=False),
+                MetadataField(
+                    name="scores", type="array", array_type="float", required=False
+                ),
+                MetadataField(
+                    name="flags", type="array", array_type="boolean", required=False
+                ),
+            ]
+        )
 
         print("\n=== Case-Insensitive Data Type Preservation Tests ===")
 
@@ -3081,30 +3374,100 @@ class TestMetadataValidator:
             "is_active": True,
             "created_date": "2024-01-15T10:30:00Z",
             "scores": [0.8, 0.9, 0.7],
-            "flags": [True, False, True]
+            "flags": [True, False, True],
         }
 
-        is_valid, errors, normalized_data = validator.validate_and_normalize_metadata_values(
-            mixed_metadata, schema
+        is_valid, errors, normalized_data = (
+            validator.validate_and_normalize_metadata_values(mixed_metadata, schema)
         )
         print(f"Mixed data types: {'✅ Passed' if is_valid else '❌ Failed'}")
 
         if is_valid:
             # String should be lowercase
-            assert normalized_data['title'] == "test document"
+            assert normalized_data["title"] == "test document"
             # Numeric types should be unchanged
-            assert normalized_data['rating'] == 4.5
-            assert normalized_data['count'] == 42
+            assert normalized_data["rating"] == 4.5
+            assert normalized_data["count"] == 42
             # Boolean should be unchanged
-            assert normalized_data['is_active'] is True
+            assert normalized_data["is_active"] is True
             # Datetime should be normalized but not lowercase
-            assert "2024-01-15" in normalized_data['created_date']
+            assert "2024-01-15" in normalized_data["created_date"]
             # Arrays of non-strings should be unchanged
-            assert normalized_data['scores'] == [0.8, 0.9, 0.7]
-            assert normalized_data['flags'] == [True, False, True]
+            assert normalized_data["scores"] == [0.8, 0.9, 0.7]
+            assert normalized_data["flags"] == [True, False, True]
             print("✅ All data types preserved correctly")
         else:
             print(f"Errors: {errors}")
+
+
+class TestSystemManagedFields:
+    """Test cases for SYSTEM_MANAGED_FIELDS"""
+
+    def test_system_managed_fields_exists(self):
+        """Test that SYSTEM_MANAGED_FIELDS is properly defined"""
+        assert "filename" in SYSTEM_MANAGED_FIELDS
+        assert "page_number" in SYSTEM_MANAGED_FIELDS
+        assert "start_time" in SYSTEM_MANAGED_FIELDS
+        assert "end_time" in SYSTEM_MANAGED_FIELDS
+
+    def test_system_managed_fields_structure(self):
+        """Test that each system field has the required structure"""
+        for field_name, field_def in SYSTEM_MANAGED_FIELDS.items():
+            assert "type" in field_def, f"{field_name} missing type"
+            assert "description" in field_def, f"{field_name} missing description"
+            assert "rag_managed" in field_def, f"{field_name} missing rag_managed"
+            assert "support_dynamic_filtering" in field_def, (
+                f"{field_name} missing support_dynamic_filtering"
+            )
+
+    def test_filename_is_rag_managed(self):
+        """Test that filename is marked as RAG-managed (user_defined=True)"""
+        assert SYSTEM_MANAGED_FIELDS["filename"]["rag_managed"] is True
+        assert SYSTEM_MANAGED_FIELDS["filename"]["support_dynamic_filtering"] is True
+        assert SYSTEM_MANAGED_FIELDS["filename"]["type"] == "string"
+
+    def test_page_number_is_auto_extracted(self):
+        """Test that page_number is marked as auto-extracted (user_defined=False)"""
+        assert SYSTEM_MANAGED_FIELDS["page_number"]["rag_managed"] is False
+        assert SYSTEM_MANAGED_FIELDS["page_number"]["support_dynamic_filtering"] is True
+        assert SYSTEM_MANAGED_FIELDS["page_number"]["type"] == "integer"
+
+    def test_start_end_time_auto_extracted_no_filter(self):
+        """Test that start_time and end_time are auto-extracted and not in dynamic filters"""
+        assert SYSTEM_MANAGED_FIELDS["start_time"]["rag_managed"] is False
+        assert SYSTEM_MANAGED_FIELDS["start_time"]["support_dynamic_filtering"] is False
+        assert SYSTEM_MANAGED_FIELDS["start_time"]["type"] == "integer"
+
+        assert SYSTEM_MANAGED_FIELDS["end_time"]["rag_managed"] is False
+        assert SYSTEM_MANAGED_FIELDS["end_time"]["support_dynamic_filtering"] is False
+        assert SYSTEM_MANAGED_FIELDS["end_time"]["type"] == "integer"
+
+    def test_metadata_field_supports_user_defined_flag(self):
+        """Test that MetadataField supports user_defined and support_dynamic_filtering flags"""
+        # Test with user_defined=True
+        field1 = MetadataField(
+            name="filename",
+            type="string",
+            user_defined=True,
+            support_dynamic_filtering=True,
+        )
+        assert field1.user_defined is True
+        assert field1.support_dynamic_filtering is True
+
+        # Test with user_defined=False
+        field2 = MetadataField(
+            name="page_number",
+            type="integer",
+            user_defined=False,
+            support_dynamic_filtering=True,
+        )
+        assert field2.user_defined is False
+        assert field2.support_dynamic_filtering is True
+
+        # Test defaults to True
+        field3 = MetadataField(name="custom", type="string")
+        assert field3.user_defined is True
+        assert field3.support_dynamic_filtering is True
 
 
 if __name__ == "__main__":

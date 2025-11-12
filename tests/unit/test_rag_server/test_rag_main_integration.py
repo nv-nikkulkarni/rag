@@ -289,7 +289,7 @@ class TestNvidiaRAGPrivateMethodsWorking:
         rag = NvidiaRAG()
 
         result = rag._build_retriever_query_from_content("Hello world")
-        assert result == "Hello world"
+        assert result == ("Hello world", False)
 
     def test_build_retriever_query_from_content_multimodal(self):
         """Test _build_retriever_query_from_content with multimodal input."""
@@ -302,9 +302,8 @@ class TestNvidiaRAGPrivateMethodsWorking:
         ]
 
         result = rag._build_retriever_query_from_content(content)
-        assert "Hello" in result
-        assert "world" in result
-        assert "http://example.com/image.jpg" in result
+        # When image_url is present, the method returns the image URL
+        assert result == ("http://example.com/image.jpg", True)
 
     def test_print_conversation_history(self):
         """Test __print_conversation_history method."""
@@ -413,10 +412,10 @@ class TestNvidiaRAGEdgeCasesWorking:
         assert rag._contains_images(123) is False
 
         # Test _build_retriever_query_from_content with various edge cases
-        assert rag._build_retriever_query_from_content("") == ""
-        assert rag._build_retriever_query_from_content([]) == ""
-        assert rag._build_retriever_query_from_content(None) == ""
-        assert rag._build_retriever_query_from_content(123) == "123"
+        assert rag._build_retriever_query_from_content("") == ("", False)
+        assert rag._build_retriever_query_from_content([]) == ("", False)
+        assert rag._build_retriever_query_from_content(None) == ("", False)
+        assert rag._build_retriever_query_from_content(123) == ("123", False)
 
     def test_format_document_with_source_edge_cases(self):
         """Test __format_document_with_source with edge cases."""

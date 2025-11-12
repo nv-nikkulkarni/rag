@@ -351,7 +351,7 @@ class TestNvidiaRAGBuildRetrieverQuery:
         rag = NvidiaRAG()
 
         result = rag._build_retriever_query_from_content("Hello world")
-        assert result == "Hello world"
+        assert result == ("Hello world", False)
 
     def test_build_retriever_query_from_multimodal_list(self):
         """Test building retriever query from multimodal list content."""
@@ -364,9 +364,8 @@ class TestNvidiaRAGBuildRetrieverQuery:
         ]
 
         result = rag._build_retriever_query_from_content(content)
-        assert "Hello" in result
-        assert "world" in result
-        assert "http://example.com/image.jpg" in result
+        # When image_url is present, the method returns the image URL
+        assert result == ("http://example.com/image.jpg", True)
 
     def test_build_retriever_query_from_list_without_text(self):
         """Test building retriever query from list without text items."""
@@ -377,14 +376,14 @@ class TestNvidiaRAGBuildRetrieverQuery:
         ]
 
         result = rag._build_retriever_query_from_content(content)
-        assert result == "http://example.com/image.jpg"
+        assert result == ("http://example.com/image.jpg", True)
 
     def test_build_retriever_query_from_other_type(self):
         """Test building retriever query from other content types."""
         rag = NvidiaRAG()
 
         result = rag._build_retriever_query_from_content(123)
-        assert result == "123"
+        assert result == ("123", False)
 
 
 class TestNvidiaRAGPrintConversationHistory:

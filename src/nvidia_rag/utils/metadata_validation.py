@@ -94,6 +94,39 @@ class MetadataConfigError(MetadataValidationError):
 
 
 # ============================================================================
+# System-managed metadata fields
+# rag_managed: True = RAG-managed field, False = nv-ingest auto-extracted field
+# support_dynamic_filtering: True = Field is included in LLM prompts for dynamic filter generation
+# ============================================================================
+
+SYSTEM_MANAGED_FIELDS = {
+    "filename": {
+        "type": "string",
+        "description": "Name of the uploaded file",
+        "rag_managed": True,
+        "support_dynamic_filtering": True,
+    },
+    "page_number": {
+        "type": "integer",
+        "description": "Page number where content appears in the document (1-indexed, first page is 1)",
+        "rag_managed": False,
+        "support_dynamic_filtering": True,
+    },
+    "start_time": {
+        "type": "integer",
+        "description": "Start timestamp in milliseconds for audio or video segments",
+        "rag_managed": False,
+        "support_dynamic_filtering": False,
+    },
+    "end_time": {
+        "type": "integer",
+        "description": "End timestamp in milliseconds for audio or video segments",
+        "rag_managed": False,
+        "support_dynamic_filtering": False,
+    },
+}
+
+# ============================================================================
 # Enums and Constants
 # ============================================================================
 
@@ -395,6 +428,8 @@ class MetadataField(BaseModel):
         name: The field name (required, non-empty string)
         type: The field data type (string, datetime, number, integer, float, boolean, array)
         required: Whether the field is mandatory (default: False)
+        user_defined: Whether field is user-defined (True) or nv-ingest auto-extracted (False)
+        support_dynamic_filtering: Whether field is included in LLM prompts for dynamic filter generation (default: True)
         array_type: Type of array elements (required only for array fields)
         max_length: Maximum length constraint (for string/array fields only)
         description: Optional description of the field for documentation
@@ -405,6 +440,14 @@ class MetadataField(BaseModel):
         "string", "datetime", "number", "integer", "float", "boolean", "array"
     ] = Field(..., description="Field type")
     required: bool = Field(default=False, description="Whether the field is required")
+    user_defined: bool = Field(
+        default=True,
+        description="Whether field is user-defined (True) or nv-ingest auto-extracted (False)",
+    )
+    support_dynamic_filtering: bool = Field(
+        default=True,
+        description="Whether field is included in LLM prompts for dynamic filter generation",
+    )
     array_type: Literal["string", "number", "integer", "float", "boolean"] | None = (
         Field(
             default=None,
@@ -1534,6 +1577,43 @@ class FilterSemanticValidator(Visitor):
             raise FilterSemanticError(
                 f"Array function '{func_name}' cannot be used on field '{field_name}' (type: {field_info.type}). Array functions only work with array fields."
             )
+
+        # Validate value parameter type for array_contains, array_contains_all, array_contains_any
+        if func_name.lower() in [
+            "array_contains",
+            "array_contains_all",
+            "array_contains_any",
+        ]:
+            value_token = tree.children[4]
+            value_str = str(value_token).strip()
+
+            # Check if value is an array literal (starts with '[' or has 'array_literal' in its type)
+            is_array_value = value_str.startswith("[") or any(
+                hasattr(child, "data") and child.data == "array_literal"
+                for child in (
+                    value_token.children if hasattr(value_token, "children") else []
+                )
+            )
+
+            if func_name.lower() == "array_contains":
+                # array_contains must use scalar values only
+                if is_array_value:
+                    raise FilterSemanticError(
+                        f"array_contains() expects a scalar value, not an array. "
+                        f"Found array value for field '{field_name}'. "
+                        f"Use array_contains_all() if you want to check if the field contains all values from an array, "
+                        f"or array_contains_any() if you want to check if the field contains any value from an array."
+                    )
+            elif func_name.lower() in ["array_contains_all", "array_contains_any"]:
+                # array_contains_all and array_contains_any must use array values only
+                if not is_array_value:
+                    raise FilterSemanticError(
+                        f"{func_name}() expects an array value, not a scalar. "
+                        f"Found scalar value for field '{field_name}'. "
+                        f"Use array_contains() if you want to check if the field contains a single scalar value, "
+                        f"or provide an array like [{value_str}]."
+                    )
+
         return tree
 
     def array_length_comparison(self, tree) -> Any:
@@ -2142,6 +2222,19 @@ class MilvusQueryTransformer(Transformer):
         match = re.match(r'content_metadata\["([^"]+)"\]', field_val)
         return match.group(1) if match else None
 
+    def _normalize_array_string_value(self, field_val: str, value_val: str) -> str:
+        """Normalize string array values to lowercase for case-insensitive matching.
+
+        Only normalizes when the field exists in schema and has array_type of 'string'.
+        Returns the original value unchanged for non-string array fields or unknown fields.
+        """
+        field_name = self._extract_field_name(field_val)
+        if self.metadata_schema and field_name:
+            field_info = self.metadata_schema.field_dict.get(field_name)
+            if field_info and is_string_type(field_info.array_type):
+                return value_val.lower()
+        return value_val
+
     def array_comparison(self, args) -> str:
         field_val = str(args[0])
         op_val = str(args[1])
@@ -2161,6 +2254,9 @@ class MilvusQueryTransformer(Transformer):
             field_info = self.metadata_schema.field_dict.get(field_name)
             if field_info and is_array_type(field_info.type):
                 is_array_field = True
+
+        # Normalize string values to lowercase for case-insensitive matching
+        value_val = self._normalize_array_string_value(field_val, value_val)
 
         if "includes" in op_lower and "not" not in op_lower:
             if value_val.startswith("["):
@@ -2208,6 +2304,9 @@ class MilvusQueryTransformer(Transformer):
                     f"Please provide non-empty array values or use explicit field comparisons."
                 )
 
+            # Normalize string values to lowercase for case-insensitive matching
+            value_val = self._normalize_array_string_value(field_val, value_val)
+
             return f"{func_name}({field_val}, {value_val})"
 
     def array_length_comparison(self, args) -> str:
@@ -2238,6 +2337,9 @@ class MilvusQueryTransformer(Transformer):
                 f"Please provide non-empty array values or use explicit field comparisons."
             )
 
+        # Normalize string values to lowercase for case-insensitive matching
+        value_val = self._normalize_array_string_value(field_val, value_val)
+
         return f"array_contains({field_val}, {value_val})"
 
     def array_membership_negated(self, args) -> str:
@@ -2249,6 +2351,9 @@ class MilvusQueryTransformer(Transformer):
                 f"Empty array comparisons are not supported for field '{field_val}'. "
                 f"Please provide non-empty array values or use explicit field comparisons."
             )
+
+        # Normalize string values to lowercase for case-insensitive matching
+        value_val = self._normalize_array_string_value(field_val, value_val)
 
         return f"not array_contains({field_val}, {value_val})"
 
@@ -2420,6 +2525,9 @@ class MilvusQueryTransformer(Transformer):
         if self.metadata_schema and field_name:
             field_info = self.metadata_schema.field_dict.get(field_name)
             if field_info and is_array_type(field_info.type):
+                # Normalize string values to lowercase for case-insensitive matching
+                if is_string_type(field_info.array_type):
+                    value_val = value_val.lower()
                 return f"array_contains_any({field_val}, {value_val})"
         return f"{field_val} in {value_val}"
 
@@ -2438,6 +2546,9 @@ class MilvusQueryTransformer(Transformer):
         if self.metadata_schema and field_name:
             field_info = self.metadata_schema.field_dict.get(field_name)
             if field_info and is_array_type(field_info.type):
+                # Normalize string values to lowercase for case-insensitive matching
+                if is_string_type(field_info.array_type):
+                    value_val = value_val.lower()
                 return f"not array_contains_any({field_val}, {value_val})"
         return f"{field_val} not in {value_val}"
 

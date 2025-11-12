@@ -17,25 +17,26 @@ import asyncio
 import logging
 import os
 from unittest.mock import AsyncMock, MagicMock, patch
-import aiohttp
 
+import aiohttp
 import pytest
 
 from nvidia_rag.ingestor_server.health import (
-    check_service_health,
+    check_all_services_health,
+    check_and_print_services_health,
     check_minio_health,
     check_nv_ingest_health,
     check_redis_health,
-    is_nvidia_api_catalog_url,
-    check_all_services_health,
-    print_health_report,
-    check_and_print_services_health,
+    check_service_health,
     check_services_health,
+    is_nvidia_api_catalog_url,
+    print_health_report,
 )
 
 
 class MockAsyncContextManager:
     """Helper class to properly mock async context managers for aiohttp"""
+
     def __init__(self, response):
         self.response = response
 
@@ -48,16 +49,6 @@ class MockAsyncContextManager:
 
 class TestCheckServiceHealth:
     """Test cases for check_service_health function"""
-
-
-
-
-
-
-
-
-
-
 
     @pytest.mark.asyncio
     async def test_check_service_health_no_url(self):
@@ -76,7 +67,9 @@ class TestCheckMinioHealth:
         """Test successful MinIO health check"""
         mock_buckets = [MagicMock(), MagicMock()]
 
-        with patch("nvidia_rag.ingestor_server.health.MinioOperator") as mock_minio_class:
+        with patch(
+            "nvidia_rag.ingestor_server.health.MinioOperator"
+        ) as mock_minio_class:
             mock_minio = MagicMock()
             mock_minio.client.list_buckets.return_value = mock_buckets
             mock_minio_class.return_value = mock_minio
@@ -90,7 +83,9 @@ class TestCheckMinioHealth:
     @pytest.mark.asyncio
     async def test_check_minio_health_error(self):
         """Test MinIO health check with error"""
-        with patch("nvidia_rag.ingestor_server.health.MinioOperator") as mock_minio_class:
+        with patch(
+            "nvidia_rag.ingestor_server.health.MinioOperator"
+        ) as mock_minio_class:
             mock_minio_class.side_effect = Exception("Connection failed")
 
             result = await check_minio_health("localhost:9000", "key", "secret")
@@ -107,13 +102,8 @@ class TestCheckMinioHealth:
         assert result["error"] == "No endpoint provided"
 
 
-
 class TestCheckNvIngestHealth:
     """Test cases for check_nv_ingest_health function"""
-
-
-
-
 
     @pytest.mark.asyncio
     async def test_check_nv_ingest_health_no_hostname_or_port(self):
@@ -190,9 +180,15 @@ class TestIsNvidiaApiCatalogUrl:
 
     def test_is_nvidia_api_catalog_url_nvidia_prefix(self):
         """Test with NVIDIA API catalog URLs"""
-        assert is_nvidia_api_catalog_url("https://integrate.api.nvidia.com/v1/models") is True
+        assert (
+            is_nvidia_api_catalog_url("https://integrate.api.nvidia.com/v1/models")
+            is True
+        )
         assert is_nvidia_api_catalog_url("https://ai.api.nvidia.com/v1/models") is True
-        assert is_nvidia_api_catalog_url("https://api.nvcf.nvidia.com/v2/functions") is True
+        assert (
+            is_nvidia_api_catalog_url("https://api.nvcf.nvidia.com/v2/functions")
+            is True
+        )
 
     def test_is_nvidia_api_catalog_url_other_url(self):
         """Test with non-NVIDIA API Catalog URL"""
@@ -219,7 +215,9 @@ class TestCheckAllServicesHealth:
         config.summarizer.server_url = "http://localhost:8082"
         config.summarizer.model_name = "test-llm-model"
         config.nv_ingest.extract_images = True
-        config.nv_ingest.caption_endpoint_url = "http://localhost:8083/v1/chat/completions"
+        config.nv_ingest.caption_endpoint_url = (
+            "http://localhost:8083/v1/chat/completions"
+        )
         config.nv_ingest.caption_model_name = "test-caption-model"
         return config
 
@@ -227,20 +225,44 @@ class TestCheckAllServicesHealth:
     async def test_check_all_services_health_success(self, mock_config):
         """Test successful check of all services"""
         mock_vdb_op = MagicMock()
-        mock_vdb_op.check_health = AsyncMock(return_value={"service": "Vector DB", "status": "healthy"})
-        
-        with patch("nvidia_rag.ingestor_server.health.get_config", return_value=mock_config):
-            with patch.dict(os.environ, {"REDIS_HOST": "localhost", "REDIS_PORT": "6379", "REDIS_DB": "0"}):
-                with patch("nvidia_rag.ingestor_server.health.check_minio_health") as mock_minio:
-                    with patch("nvidia_rag.ingestor_server.health.check_nv_ingest_health") as mock_nv_ingest:
-                        with patch("nvidia_rag.ingestor_server.health.check_service_health") as mock_service:
-                            with patch("nvidia_rag.ingestor_server.health.check_redis_health") as mock_redis:
+        mock_vdb_op.check_health = AsyncMock(
+            return_value={"service": "Vector DB", "status": "healthy"}
+        )
 
+        with patch("nvidia_rag.utils.common.get_config", return_value=mock_config):
+            with patch.dict(
+                os.environ,
+                {"REDIS_HOST": "localhost", "REDIS_PORT": "6379", "REDIS_DB": "0"},
+            ):
+                with patch(
+                    "nvidia_rag.ingestor_server.health.check_minio_health"
+                ) as mock_minio:
+                    with patch(
+                        "nvidia_rag.ingestor_server.health.check_nv_ingest_health"
+                    ) as mock_nv_ingest:
+                        with patch(
+                            "nvidia_rag.ingestor_server.health.check_service_health"
+                        ) as mock_service:
+                            with patch(
+                                "nvidia_rag.ingestor_server.health.check_redis_health"
+                            ) as mock_redis:
                                 # Setup mock returns
-                                mock_minio.return_value = {"service": "MinIO", "status": "healthy"}
-                                mock_nv_ingest.return_value = {"service": "NV-Ingest", "status": "healthy"}
-                                mock_service.return_value = {"service": "Test", "status": "healthy"}
-                                mock_redis.return_value = {"service": "Redis", "status": "healthy"}
+                                mock_minio.return_value = {
+                                    "service": "MinIO",
+                                    "status": "healthy",
+                                }
+                                mock_nv_ingest.return_value = {
+                                    "service": "NV-Ingest",
+                                    "status": "healthy",
+                                }
+                                mock_service.return_value = {
+                                    "service": "Test",
+                                    "status": "healthy",
+                                }
+                                mock_redis.return_value = {
+                                    "service": "Redis",
+                                    "status": "healthy",
+                                }
 
                                 result = await check_all_services_health(mock_vdb_op)
 
@@ -258,14 +280,22 @@ class TestCheckAllServicesHealth:
         mock_config.nv_ingest.caption_endpoint_url = "https://api.nvcf.nvidia.com/v2"
 
         mock_vdb_op = MagicMock()
-        mock_vdb_op.check_health = AsyncMock(return_value={"service": "Vector DB", "status": "healthy"})
+        mock_vdb_op.check_health = AsyncMock(
+            return_value={"service": "Vector DB", "status": "healthy"}
+        )
 
-        with patch("nvidia_rag.ingestor_server.health.get_config", return_value=mock_config):
-            with patch.dict(os.environ, {"REDIS_HOST": "localhost", "REDIS_PORT": "6379", "REDIS_DB": "0"}):
+        with patch("nvidia_rag.utils.common.get_config", return_value=mock_config):
+            with patch.dict(
+                os.environ,
+                {"REDIS_HOST": "localhost", "REDIS_PORT": "6379", "REDIS_DB": "0"},
+            ):
                 with patch("nvidia_rag.ingestor_server.health.check_minio_health"):
-                    with patch("nvidia_rag.ingestor_server.health.check_nv_ingest_health"):
-                        with patch("nvidia_rag.ingestor_server.health.check_redis_health"):
-
+                    with patch(
+                        "nvidia_rag.ingestor_server.health.check_nv_ingest_health"
+                    ):
+                        with patch(
+                            "nvidia_rag.ingestor_server.health.check_redis_health"
+                        ):
                             result = await check_all_services_health(mock_vdb_op)
 
                             nim_services = result["nim"]
@@ -275,16 +305,16 @@ class TestCheckAllServicesHealth:
                             expected_services = [
                                 {
                                     "url": "https://integrate.api.nvidia.com/v1",  # embeddings
-                                    "model": "test-embedding-model"
+                                    "model": "test-embedding-model",
                                 },
                                 {
-                                    "url": "https://ai.api.nvidia.com/v1",        # summarizer
-                                    "model": "test-llm-model"
+                                    "url": "https://ai.api.nvidia.com/v1",  # summarizer
+                                    "model": "test-llm-model",
                                 },
                                 {
-                                    "url": "https://api.nvcf.nvidia.com/v2",      # caption endpoint
-                                    "model": "test-caption-model"
-                                }
+                                    "url": "https://api.nvcf.nvidia.com/v2",  # caption endpoint
+                                    "model": "test-caption-model",
+                                },
                             ]
 
                             for i, service in enumerate(nim_services):
@@ -298,21 +328,34 @@ class TestCheckAllServicesHealth:
         mock_config.vector_store.name = "unknown_db"
 
         mock_vdb_op = MagicMock()
-        mock_vdb_op.check_health.side_effect = Exception("Unsupported vector store type")
+        mock_vdb_op.check_health.side_effect = Exception(
+            "Unsupported vector store type"
+        )
 
-        with patch("nvidia_rag.ingestor_server.health.get_config", return_value=mock_config):
-            with patch.dict(os.environ, {"REDIS_HOST": "localhost", "REDIS_PORT": "6379", "REDIS_DB": "0"}):
+        with patch("nvidia_rag.utils.common.get_config", return_value=mock_config):
+            with patch.dict(
+                os.environ,
+                {"REDIS_HOST": "localhost", "REDIS_PORT": "6379", "REDIS_DB": "0"},
+            ):
                 with patch("nvidia_rag.ingestor_server.health.check_minio_health"):
-                    with patch("nvidia_rag.ingestor_server.health.check_nv_ingest_health"):
-                        with patch("nvidia_rag.ingestor_server.health.check_service_health"):
-                            with patch("nvidia_rag.ingestor_server.health.check_redis_health"):
-
+                    with patch(
+                        "nvidia_rag.ingestor_server.health.check_nv_ingest_health"
+                    ):
+                        with patch(
+                            "nvidia_rag.ingestor_server.health.check_service_health"
+                        ):
+                            with patch(
+                                "nvidia_rag.ingestor_server.health.check_redis_health"
+                            ):
                                 result = await check_all_services_health(mock_vdb_op)
 
                                 db_services = result["databases"]
                                 assert len(db_services) == 1
                                 assert db_services[0]["status"] == "unknown"
-                                assert "Unsupported vector store type" in db_services[0]["error"]
+                                assert (
+                                    "Unsupported vector store type"
+                                    in db_services[0]["error"]
+                                )
 
 
 class TestPrintHealthReport:
@@ -325,8 +368,13 @@ class TestPrintHealthReport:
                 {"service": "Milvus", "status": "healthy", "latency_ms": 100}
             ],
             "nim": [
-                {"service": "Embeddings", "status": "healthy", "latency_ms": 50, "model": "test-embedding-model"}
-            ]
+                {
+                    "service": "Embeddings",
+                    "status": "healthy",
+                    "latency_ms": 50,
+                    "model": "test-embedding-model",
+                }
+            ],
         }
 
         with caplog.at_level(logging.INFO):
@@ -342,8 +390,13 @@ class TestPrintHealthReport:
                 {"service": "Redis", "status": "error", "error": "Connection failed"}
             ],
             "nim": [
-                {"service": "Embeddings", "status": "skipped", "error": "No URL provided", "model": "test-embedding-model"}
-            ]
+                {
+                    "service": "Embeddings",
+                    "status": "skipped",
+                    "error": "No URL provided",
+                    "model": "test-embedding-model",
+                }
+            ],
         }
 
         with caplog.at_level(logging.INFO):
@@ -362,8 +415,12 @@ class TestCheckAndPrintServicesHealth:
         mock_results = {"databases": [], "nim": []}
         mock_vdb_op = MagicMock()
 
-        with patch("nvidia_rag.ingestor_server.health.check_all_services_health") as mock_check:
-            with patch("nvidia_rag.ingestor_server.health.print_health_report") as mock_print:
+        with patch(
+            "nvidia_rag.ingestor_server.health.check_all_services_health"
+        ) as mock_check:
+            with patch(
+                "nvidia_rag.ingestor_server.health.print_health_report"
+            ) as mock_print:
                 mock_check.return_value = mock_results
 
                 result = await check_and_print_services_health(mock_vdb_op)
@@ -388,4 +445,3 @@ class TestCheckServicesHealth:
 
             assert result == mock_results
             mock_run.assert_called_once()
-

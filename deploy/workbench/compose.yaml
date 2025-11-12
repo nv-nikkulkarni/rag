@@ -203,7 +203,7 @@ services:
   # Main ingestor server which is responsible for ingestion
   ingestor-server:
     container_name: ingestor-server
-    image: nvcr.io/nvidia/blueprint/ingestor-server:${TAG:-2.3.0}
+    image: nvcr.io/0648981100760671/ingestor-server:${TAG:-latest}
     build:
       # Set context to repo's root directory
       context: ../../
@@ -236,6 +236,10 @@ services:
       APP_VECTORSTORE_ENABLEGPUSEARCH: ${APP_VECTORSTORE_ENABLEGPUSEARCH:-True}
       # ef: Parameter controlling query time/accuracy trade-off. Higher ef leads to more accurate but slower search.
       APP_VECTORSTORE_EF: ${APP_VECTORSTORE_EF:-100}
+      # Username for vector store (Authentication is currently supported for Milvus only)
+      APP_VECTORSTORE_USERNAME: ${APP_VECTORSTORE_USERNAME:-""}
+      # Password for vector store (Authentication is currently supported for Milvus only)
+      APP_VECTORSTORE_PASSWORD: ${APP_VECTORSTORE_PASSWORD:-""}
       # vectorstore collection name to store embeddings
       COLLECTION_NAME: ${COLLECTION_NAME:-multimodal_data}
 
@@ -320,8 +324,8 @@ services:
     profiles: ["ingest"]
 
   nv-ingest-ms-runtime:
-    image: nvcr.io/nvidia/nemo-microservices/nv-ingest:25.9.0
-    cpuset: "0-15"
+    image: nvcr.io/0648981100760671/nv-ingest:2025.11.11
+    # cpuset: "0-15" # Uncomment to restrict this container to CPU cores 0–15
     volumes:
       - ${DATASET_ROOT:-./data}:/workspace/data
     ports:
@@ -405,7 +409,7 @@ services:
   # Main orchestrator server which stiches together all calls to different services to fulfill the user request
   rag-server:
     container_name: rag-server
-    image: nvcr.io/nvidia/blueprint/rag-server:${TAG:-2.3.0}
+    image: nvcr.io/0648981100760671/rag-server:${TAG:-latest}
     build:
       # Set context to repo's root directory
       context: ../../
@@ -534,7 +538,7 @@ services:
   # Sample UI container which interacts with APIs exposed by rag-server container
   rag-frontend:
     container_name: rag-frontend
-    image: nvcr.io/nvidia/blueprint/rag-frontend:${TAG:-2.3.0}
+    image: nvcr.io/0648981100760671/rag-frontend:${TAG:-latest}
     build:
       # Set context to repo's root directory
       context: ../../frontend

@@ -33,13 +33,14 @@ from langchain_core.language_models.chat_models import SimpleChatModel
 from langchain_nvidia_ai_endpoints import ChatNVIDIA
 
 from nvidia_rag.utils.common import (
+    ConfigProxy,
     combine_dicts,
-    get_config,
     sanitize_nim_url,
     utils_cache,
 )
 
 logger = logging.getLogger(__name__)
+CONFIG = ConfigProxy()
 
 try:
     from langchain_openai import ChatOpenAI
@@ -93,22 +94,20 @@ def get_prompts() -> dict:
 def get_llm(**kwargs) -> LLM | SimpleChatModel:
     """Create the LLM connection."""
 
-    settings = get_config()
-
     # Sanitize the URL
     url = sanitize_nim_url(kwargs.get("llm_endpoint", ""), kwargs.get("model"), "chat")
 
     # Check if guardrails are enabled
     enable_guardrails = (
-        settings.enable_guardrails and kwargs.get("enable_guardrails", False) is True
+        CONFIG.enable_guardrails and kwargs.get("enable_guardrails", False) is True
     )
 
     logger.debug(
         "Using %s as model engine for llm. Model name: %s",
-        settings.llm.model_engine,
+        CONFIG.llm.model_engine,
         kwargs.get("model"),
     )
-    if settings.llm.model_engine == "nvidia-ai-endpoints":
+    if CONFIG.llm.model_engine == "nvidia-ai-endpoints":
         # Use ChatOpenAI with guardrails if enabled
         # TODO Add the ChatNVIDIA implementation when available
         if enable_guardrails:
@@ -153,18 +152,14 @@ def get_llm(**kwargs) -> LLM | SimpleChatModel:
         if url:
             logger.debug(f"Length of llm endpoint url string {url}")
             logger.info("Using llm model %s hosted at %s", kwargs.get("model"), url)
-
-            # For External endpoints, use LLM_API_KEY if available, otherwise fall back to NVIDIA_API_KEY
-            api_key = os.environ.get("LLM_API_KEY") or os.environ.get(
-                "NVIDIA_API_KEY", ""
-            )
             return ChatNVIDIA(
                 base_url=url,
                 model=kwargs.get("model"),
-                api_key=api_key if api_key else None,
                 temperature=kwargs.get("temperature", None),
                 top_p=kwargs.get("top_p", None),
                 max_tokens=kwargs.get("max_tokens", None),
+                min_tokens=kwargs.get("min_tokens", None),
+                ignore_eos=kwargs.get("ignore_eos", False),
                 stop=kwargs.get("stop", []),
             )
 
@@ -174,6 +169,8 @@ def get_llm(**kwargs) -> LLM | SimpleChatModel:
             temperature=kwargs.get("temperature", None),
             top_p=kwargs.get("top_p", None),
             max_tokens=kwargs.get("max_tokens", None),
+            min_tokens=kwargs.get("min_tokens", None),
+            ignore_eos=kwargs.get("ignore_eos", False),
             stop=kwargs.get("stop", []),
         )
 

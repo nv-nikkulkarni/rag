@@ -105,9 +105,7 @@ class TestRAGServerMetricsEndpoint:
                 "nvidia_rag.rag_server.server.NVIDIA_RAG", mock_nvidia_rag_instance
             ):
                 # Mock the tracing setup to avoid instrumentation issues
-                with patch(
-                    "nvidia_rag.rag_server.server.get_config"
-                ) as mock_get_config:
+                with patch("nvidia_rag.utils.common.get_config") as mock_get_config:
                     # Create a mock settings object with tracing disabled
                     mock_settings = Mock()
                     mock_settings.tracing.enabled = False

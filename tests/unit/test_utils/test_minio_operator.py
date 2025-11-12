@@ -256,3 +256,111 @@ def test_unique_thumbnail_id_helpers(minio_module):
     assert uid == "coll_::_file.pdf_::_3_1.1235_2.0_3.9877_4.5"
 
 
+def test_extract_location_from_metadata_from_content_metadata(minio_module):
+    """Test extract_location_from_metadata when location is in content_metadata"""
+    metadata = {
+        "content_metadata": {
+            "type": "image",
+            "location": [10.0, 20.0, 30.0, 40.0]
+        }
+    }
+    location = minio_module.extract_location_from_metadata("image", metadata)
+    assert location == [10.0, 20.0, 30.0, 40.0]
+
+
+def test_extract_location_from_metadata_from_image_metadata(minio_module):
+    """Test extract_location_from_metadata from image_metadata"""
+    metadata = {
+        "image_metadata": {
+            "image_location": [5.0, 10.0, 15.0, 20.0]
+        }
+    }
+    location = minio_module.extract_location_from_metadata("image", metadata)
+    assert location == [5.0, 10.0, 15.0, 20.0]
+
+
+def test_extract_location_from_metadata_from_table_metadata(minio_module):
+    """Test extract_location_from_metadata from table_metadata"""
+    metadata = {
+        "table_metadata": {
+            "table_location": [1.0, 2.0, 3.0, 4.0]
+        }
+    }
+    location = minio_module.extract_location_from_metadata("structured", metadata)
+    assert location == [1.0, 2.0, 3.0, 4.0]
+
+
+def test_extract_location_from_metadata_from_chart_metadata(minio_module):
+    """Test extract_location_from_metadata from chart_metadata"""
+    metadata = {
+        "chart_metadata": {
+            "chart_location": [11.0, 22.0, 33.0, 44.0]
+        }
+    }
+    location = minio_module.extract_location_from_metadata("structured", metadata)
+    assert location == [11.0, 22.0, 33.0, 44.0]
+
+
+def test_extract_location_from_metadata_no_location(minio_module):
+    """Test extract_location_from_metadata when no location is found"""
+    metadata = {"some_other_field": "value"}
+    location = minio_module.extract_location_from_metadata("image", metadata)
+    assert location == []
+
+
+def test_get_unique_thumbnail_id_from_result_with_location(minio_module):
+    """Test get_unique_thumbnail_id_from_result with location provided"""
+    result = minio_module.get_unique_thumbnail_id_from_result(
+        collection_name="test_coll",
+        file_name="doc.pdf",
+        page_number=1,
+        location=[10.0, 20.0, 30.0, 40.0],
+        metadata=None
+    )
+    assert result == "test_coll_::_doc.pdf_::_1_10.0_20.0_30.0_40.0"
+
+
+def test_get_unique_thumbnail_id_from_result_with_metadata_fallback(minio_module):
+    """Test get_unique_thumbnail_id_from_result with metadata fallback"""
+    metadata = {
+        "content_metadata": {
+            "type": "image",
+            "location": [5.0, 10.0, 15.0, 20.0]
+        }
+    }
+    result = minio_module.get_unique_thumbnail_id_from_result(
+        collection_name="test_coll",
+        file_name="doc.pdf",
+        page_number=2,
+        location=None,
+        metadata=metadata
+    )
+    assert result == "test_coll_::_doc.pdf_::_2_5.0_10.0_15.0_20.0"
+
+
+def test_get_unique_thumbnail_id_from_result_no_location_returns_none(minio_module):
+    """Test get_unique_thumbnail_id_from_result returns None when no location found"""
+    result = minio_module.get_unique_thumbnail_id_from_result(
+        collection_name="test_coll",
+        file_name="doc.pdf",
+        page_number=1,
+        location=None,
+        metadata={}
+    )
+    assert result is None
+
+
+def test_get_unique_thumbnail_id_from_result_handles_exceptions(minio_module):
+    """Test get_unique_thumbnail_id_from_result handles exceptions gracefully"""
+    # Provide invalid location that would cause an error in get_unique_thumbnail_id
+    result = minio_module.get_unique_thumbnail_id_from_result(
+        collection_name="test_coll",
+        file_name="doc.pdf",
+        page_number=1,
+        location="invalid_location",  # Not a list
+        metadata=None
+    )
+    # Should return None on exception
+    assert result is None
+
+

@@ -1,9 +1,9 @@
-# Quickstart for NVIDIA AI Workbench 
+# Quickstart for NVIDIA AI Workbench
 
 This blueprint is for developers who want a quick start to set up a RAG solution with a path-to-production with NVIDIA NIM.
 
 > **Note**
-> This blueprint runs in [NVIDIA AI Workbench](https://docs.nvidia.com/ai-workbench/user-guide/latest/overview/introduction.html). It's a free, lightweight developer platform that you can run on your own systems to get up and running with complex AI applications and workloads in a short amount of time. 
+> This blueprint runs in [NVIDIA AI Workbench](https://docs.nvidia.com/ai-workbench/user-guide/latest/overview/introduction.html). It's a free, lightweight developer platform that you can run on your own systems to get up and running with complex AI applications and workloads in a short amount of time.
 
 > You may want to [**fork**](https://docs.github.com/en/pull-requests/collaborating-with-pull-requests/working-with-forks/fork-a-repo#forking-a-repository) this repository into your own account before proceeding. Otherwise you won't be able to fully push any changes you make because this NVIDIA-owned repository is **read-only**.
 
@@ -13,15 +13,15 @@ This blueprint is for developers who want a quick start to set up a RAG solution
 
 ## Project Overview
 
-This blueprint serves as a reference solution for a foundational Retrieval Augmented Generation (RAG) pipeline. One of the key use cases in Generative AI is enabling users to ask questions and receive answers based on their enterprise data corpus. This blueprint demonstrates how to set up a RAG solution that uses NVIDIA NIM and GPU-accelerated components. By default, this blueprint leverages locally-deployed NVIDIA NIM microservices to meet specific data governance and latency requirements. However, you can replace these models with your NVIDIA-hosted models available in the [NVIDIA API Catalog](build.nvidia.com).
+This blueprint serves as a reference solution for a foundational Retrieval Augmented Generation (RAG) pipeline. One of the key use cases in Generative AI is enabling users to ask questions and receive answers based on their enterprise data corpus. This blueprint demonstrates how to set up a RAG solution that uses NVIDIA NIM and GPU-accelerated components. By default, this blueprint leverages locally-deployed NVIDIA NIM microservices to meet specific data governance and latency requirements. However, you can replace these models with your NVIDIA-hosted models available in the [NVIDIA API Catalog](https://build.nvidia.com/).
 
 [Read More](../../README.md#software-components)
 
 ## Get Started
 
-Ensure you have satisfied the prerequisites for this Blueprint ([details](../../README.md#hardware-requirements)). 
+Ensure you have satisfied the prerequisites for this Blueprint ([details](../../README.md#hardware-requirements)).
 
-### Local Hosting 
+### Local Hosting
 
 1. Open NVIDIA AI Workbench. Select a **Location** to work in.
 
@@ -35,7 +35,7 @@ Ensure you have satisfied the prerequisites for this Blueprint ([details](../../
 
 1. Select **Start**. The compose services may take several minutes to pull and build.
 
-1. When all compose services are ready, access the frontend on the IP address, eg. ``http://<ip_addr>:8090``. 
+1. When all compose services are ready, access the frontend on the IP address, eg. ``http://<ip_addr>:8090``.
 
 1. You can now interact with the RAG Chatbot through its browser interface.
 
@@ -49,7 +49,7 @@ Ensure you have satisfied the prerequisites for this Blueprint ([details](../../
 
 1. Under **File Browser**, locate the ``variables.env`` file.
 
-1. From the hamburger menu, select **Edit**. Make the following edits: 
+1. From the hamburger menu, select **Edit**. Make the following edits:
 
    * Comment out the variables for ``on-prem NIMs``
    * Uncomment the variables for using ``cloud NIMs``
@@ -61,7 +61,7 @@ Ensure you have satisfied the prerequisites for this Blueprint ([details](../../
 
 1. Select **Start**. The compose services may take several minutes to pull and build.
 
-1. When the compose services are ready, access the frontend on the IP address, eg. ``http://<ip_addr>:8090``. 
+1. When the compose services are ready, access the frontend on the IP address, eg. ``http://<ip_addr>:8090``.
 
 1. You can now interact with the RAG Chatbot through its browser interface.
 

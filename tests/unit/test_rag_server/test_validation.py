@@ -24,6 +24,7 @@ from nvidia_rag.rag_server.validation import (
     validate_top_p,
     validate_model_info,
     validate_reranker_k,
+    validate_vdb_top_k,
 )
 
 
@@ -291,3 +292,27 @@ class TestValidateRerankerK:
         """Test validating reranker_k with invalid values"""
         with pytest.raises(ValueError, match="reranker_top_k\\(15\\) must be less than or equal to vdb_top_k \\(10\\)\\. Please check your settings and try again\\."):
             validate_reranker_k(15, 10)
+
+
+class TestValidateVdbTopK:
+    """Test validate_vdb_top_k function"""
+
+    def test_validate_vdb_top_k_valid_positive(self):
+        """Test validating vdb_top_k with valid positive value"""
+        result = validate_vdb_top_k(10)
+        assert result == 10
+
+    def test_validate_vdb_top_k_valid_one(self):
+        """Test validating vdb_top_k with value of 1"""
+        result = validate_vdb_top_k(1)
+        assert result == 1
+
+    def test_validate_vdb_top_k_zero(self):
+        """Test validating vdb_top_k with zero raises ValueError"""
+        with pytest.raises(ValueError, match="vdb_top_k must be greater than 0, got 0\\. Please provide a positive integer for the number of documents to retrieve from the vector database\\."):
+            validate_vdb_top_k(0)
+
+    def test_validate_vdb_top_k_negative(self):
+        """Test validating vdb_top_k with negative value raises ValueError"""
+        with pytest.raises(ValueError, match="vdb_top_k must be greater than 0, got -5\\. Please provide a positive integer for the number of documents to retrieve from the vector database\\."):
+            validate_vdb_top_k(-5)

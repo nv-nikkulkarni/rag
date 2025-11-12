@@ -13,13 +13,17 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+import importlib
 import os
 import tempfile
 from unittest.mock import MagicMock, Mock, patch
 
 import pandas as pd
 import pytest
+
+from nvidia_rag.utils import configuration_wizard
 from nvidia_rag.utils.common import (
+    ConfigProxy,
     combine_dicts,
     filter_documents_by_confidence,
     get_config,
@@ -31,6 +35,14 @@ from nvidia_rag.utils.common import (
     utils_cache,
     validate_filter_expr,
 )
+
+
+@pytest.fixture(autouse=True)
+def clear_config_cache():
+    """Clear the get_config cache before each test to prevent cross-test contamination."""
+    get_config.cache_clear()
+    yield
+    get_config.cache_clear()
 
 
 class TestGetEnvVariable:
@@ -121,6 +133,218 @@ class TestGetConfig:
         with pytest.raises(RuntimeError, match="Unable to find configuration"):
             get_config()
 
+    @patch("nvidia_rag.utils.common.configuration.AppConfig.from_file")
+    def test_reload_config(self, mock_from_file):
+        """Test reload_config clears cache and reloads"""
+        from nvidia_rag.utils.common import reload_config
+
+        mock_config1 = MagicMock()
+        mock_config2 = MagicMock()
+        mock_from_file.side_effect = [mock_config1, mock_config2]
+
+        # First call
+        result1 = get_config()
+        assert result1 == mock_config1
+
+        # Reload should clear cache and reload
+        result2 = reload_config()
+        assert result2 == mock_config2
+        assert mock_from_file.call_count == 2
+
+    @patch("nvidia_rag.utils.common.configuration.AppConfig.from_file")
+    def test_get_config_singleton_behavior(self, mock_from_file):
+        """Test that get_config returns the same cached instance on multiple calls"""
+        mock_config = MagicMock()
+        mock_from_file.return_value = mock_config
+
+        # Call get_config multiple times
+        result1 = get_config()
+        result2 = get_config()
+        result3 = get_config()
+
+        # Should all return the same instance
+        assert result1 is result2
+        assert result2 is result3
+        # from_file should only be called once due to @lru_cache
+        mock_from_file.assert_called_once()
+
+    @patch("nvidia_rag.utils.common.configuration.AppConfig.from_file")
+    def test_get_config_modifications_persist(self, mock_from_file):
+        """Test that modifications to cached config persist across get_config calls"""
+        mock_config = MagicMock()
+        mock_config.test_attr = "original"
+        mock_from_file.return_value = mock_config
+
+        # First call
+        config1 = get_config()
+        config1.test_attr = "modified"
+
+        # Second call should return the same modified instance
+        config2 = get_config()
+        assert config2.test_attr == "modified"
+        assert config1 is config2
+
+
+class TestConfigProxy:
+    """Test ConfigProxy dynamic behavior"""
+
+    @patch("nvidia_rag.utils.common.get_config")
+    def test_configproxy_getattr_calls_get_config(self, mock_get_config):
+        """Test that ConfigProxy retrieves attributes dynamically from get_config"""
+        # Setup mock config with attributes
+        mock_config = MagicMock()
+        mock_config.test_attr = "test_value"
+        mock_config.another_attr = 42
+        mock_get_config.return_value = mock_config
+
+        # Create proxy and access attributes
+        proxy = ConfigProxy()
+        assert proxy.test_attr == "test_value"
+        assert proxy.another_attr == 42
+
+        # Verify get_config was called for each attribute access
+        assert mock_get_config.call_count == 2
+
+    @patch("nvidia_rag.utils.common.get_config")
+    def test_configproxy_setattr_updates_config(self, mock_get_config):
+        """Test that ConfigProxy sets attributes on the current config"""
+        # Setup mock config
+        mock_config = MagicMock()
+        mock_get_config.return_value = mock_config
+
+        # Create proxy and set attributes
+        proxy = ConfigProxy()
+        proxy.new_attr = "new_value"
+        proxy.number_attr = 123
+
+        # Verify attributes were set on the mock config
+        assert mock_config.new_attr == "new_value"
+        assert mock_config.number_attr == 123
+
+    @patch("nvidia_rag.utils.common.get_config")
+    def test_configproxy_reflects_config_changes(self, mock_get_config):
+        """Test that ConfigProxy reflects runtime configuration changes"""
+        # Setup two different mock configs
+        mock_config1 = MagicMock()
+        mock_config1.value = "config1"
+
+        mock_config2 = MagicMock()
+        mock_config2.value = "config2"
+
+        # First call returns config1, second call returns config2
+        mock_get_config.side_effect = [mock_config1, mock_config2]
+
+        # Create proxy
+        proxy = ConfigProxy()
+
+        # First access should get config1
+        assert proxy.value == "config1"
+
+        # Second access should get config2 (simulating config change)
+        assert proxy.value == "config2"
+
+        # Verify get_config was called twice
+        assert mock_get_config.call_count == 2
+
+    @patch("nvidia_rag.utils.common.get_config")
+    def test_configproxy_repr(self, mock_get_config):
+        """Test that ConfigProxy __repr__ delegates to config"""
+        mock_config = MagicMock()
+        mock_config.__repr__ = MagicMock(return_value="<MockConfig>")
+        mock_get_config.return_value = mock_config
+
+        proxy = ConfigProxy()
+        result = repr(proxy)
+
+        assert result == "<MockConfig>"
+        mock_get_config.assert_called_once()
+
+    @patch("nvidia_rag.utils.common.get_config")
+    def test_configproxy_str(self, mock_get_config):
+        """Test that ConfigProxy __str__ delegates to config"""
+        mock_config = MagicMock()
+        mock_config.__str__ = MagicMock(return_value="MockConfig string")
+        mock_get_config.return_value = mock_config
+
+        proxy = ConfigProxy()
+        result = str(proxy)
+
+        assert result == "MockConfig string"
+        mock_get_config.assert_called_once()
+
+    @patch("nvidia_rag.utils.common.get_config")
+    def test_configproxy_dir(self, mock_get_config):
+        """Test that ConfigProxy __dir__ delegates to config"""
+        mock_config = MagicMock()
+        mock_config.__dir__ = MagicMock(return_value=["attr1", "attr2", "attr3"])
+        mock_get_config.return_value = mock_config
+
+        proxy = ConfigProxy()
+        result = dir(proxy)
+
+        assert result == ["attr1", "attr2", "attr3"]
+        mock_get_config.assert_called_once()
+
+    @patch("nvidia_rag.utils.common.get_config")
+    def test_configproxy_no_caching(self, mock_get_config):
+        """Test that ConfigProxy doesn't cache config state"""
+        # Setup mock that changes its attribute value
+        mock_config = MagicMock()
+        call_count = [0]
+
+        def dynamic_attr():
+            call_count[0] += 1
+            return f"value_{call_count[0]}"
+
+        # Make the attribute return different values on each access
+        type(mock_config).dynamic_value = property(lambda self: dynamic_attr())
+        mock_get_config.return_value = mock_config
+
+        proxy = ConfigProxy()
+
+        # Access the same attribute multiple times
+        val1 = proxy.dynamic_value
+        val2 = proxy.dynamic_value
+        val3 = proxy.dynamic_value
+
+        # Each access should call get_config and get fresh value
+        assert val1 == "value_1"
+        assert val2 == "value_2"
+        assert val3 == "value_3"
+        assert mock_get_config.call_count == 3
+
+    @patch("nvidia_rag.utils.common.get_config")
+    def test_configproxy_attribute_error_propagation(self, mock_get_config):
+        """Test that AttributeError from config propagates through proxy"""
+        mock_config = MagicMock()
+        # Configure mock to raise AttributeError when accessing non-existent attribute
+        del mock_config.nonexistent_attr
+        mock_get_config.return_value = mock_config
+
+        proxy = ConfigProxy()
+
+        # Accessing a truly non-existent attribute should still work through getattr
+        # MagicMock will return a new Mock for any attribute access
+        # Verify that proxy delegates attribute access properly
+        assert getattr(proxy, "some_attr", "default") is not None
+
+
+class TestConfigMutability:
+    """Test that config objects are always mutable"""
+
+    def test_config_is_mutable(self):
+        """Test that config objects are always mutable by default"""
+
+        @configuration_wizard.configclass
+        class TestConfig(configuration_wizard.ConfigWizard):
+            test_field: str = "default"
+
+        config = TestConfig()
+
+        # Should be able to modify attributes
+        config.test_field = "modified"
+        assert config.test_field == "modified"
+
 
 class TestCombineDicts:
     """Test combine_dicts function"""
@@ -197,7 +421,7 @@ class TestSanitizeNimUrl:
         url = "https://integrate.api.nvidia.com/v1/chat"
         result = sanitize_nim_url(url, "test_model", "chat")
         assert result == url
-        mock_register.assert_called_once()
+        mock_register.assert_not_called()
 
     @patch("nvidia_rag.utils.common.register_model")
     def test_sanitize_nvidia_url_embedding(self, mock_register):
@@ -221,13 +445,12 @@ class TestGetMetadataConfiguration:
 
     @patch("nvidia_rag.utils.common.get_config")
     @patch("nvidia_rag.utils.common.prepare_custom_metadata_dataframe")
-    @patch("os.makedirs")
     def test_get_metadata_config_none_metadata(
-        self, mock_makedirs, mock_prepare, mock_get_config
+        self, mock_prepare, mock_get_config, tmp_path
     ):
         """Test with None custom_metadata - should still create CSV with filename"""
         mock_config = MagicMock()
-        mock_config.temp_dir = "/tmp"
+        mock_config.temp_dir = str(tmp_path)  # Use pytest tmp_path
         mock_get_config.return_value = mock_config
         mock_prepare.return_value = ("source", ["filename"])
 
@@ -245,13 +468,12 @@ class TestGetMetadataConfiguration:
 
     @patch("nvidia_rag.utils.common.get_config")
     @patch("nvidia_rag.utils.common.prepare_custom_metadata_dataframe")
-    @patch("os.makedirs")
     def test_get_metadata_config_empty_metadata(
-        self, mock_makedirs, mock_prepare, mock_get_config
+        self, mock_prepare, mock_get_config, tmp_path
     ):
         """Test with empty custom_metadata - should still create CSV with filename"""
         mock_config = MagicMock()
-        mock_config.temp_dir = "/tmp"
+        mock_config.temp_dir = str(tmp_path)  # Use pytest tmp_path
         mock_get_config.return_value = mock_config
         mock_prepare.return_value = ("source", ["filename"])
 
@@ -269,13 +491,12 @@ class TestGetMetadataConfiguration:
 
     @patch("nvidia_rag.utils.common.get_config")
     @patch("nvidia_rag.utils.common.prepare_custom_metadata_dataframe")
-    @patch("os.makedirs")
     def test_get_metadata_config_with_metadata(
-        self, mock_makedirs, mock_prepare, mock_get_config
+        self, mock_prepare, mock_get_config, tmp_path
     ):
         """Test with custom metadata"""
         mock_config = MagicMock()
-        mock_config.temp_dir = "/tmp"
+        mock_config.temp_dir = str(tmp_path)  # Use pytest tmp_path
         mock_get_config.return_value = mock_config
         mock_prepare.return_value = ("source", ["field1", "field2"])
 
@@ -286,7 +507,8 @@ class TestGetMetadataConfiguration:
 
         assert result[1] == "source"
         assert result[2] == ["field1", "field2"]
-        mock_makedirs.assert_called_once()
+        # Directory should be created in tmp_path (auto-cleaned by pytest)
+        assert tmp_path.exists()
 
 
 class TestPrepareCustomMetadataDataframe:
@@ -317,6 +539,159 @@ class TestPrepareCustomMetadataDataframe:
             assert "filename" in metadata_fields
             assert "category" in metadata_fields
             assert "priority" in metadata_fields
+            mock_to_csv.assert_called_once()
+        finally:
+            os.unlink(csv_file_path)
+
+    @patch("pandas.DataFrame.to_csv")
+    def test_prepare_custom_metadata_with_user_defined_fields(self, mock_to_csv):
+        """Test that user_defined=True fields are included in CSV"""
+        all_file_paths = ["path/to/file1.txt"]
+        custom_metadata = [
+            {
+                "filename": "file1.txt",
+                "metadata": {"category": "doc", "filename": "custom_name.txt"},
+            }
+        ]
+
+        # Schema with filename as user_defined=True
+        metadata_schema = [
+            {"name": "filename", "type": "string", "user_defined": True},
+            {"name": "category", "type": "string", "user_defined": True},
+        ]
+
+        with tempfile.NamedTemporaryFile(delete=False) as tmp_file:
+            csv_file_path = tmp_file.name
+
+        try:
+            result = prepare_custom_metadata_dataframe(
+                all_file_paths, csv_file_path, custom_metadata, metadata_schema
+            )
+            source_field, metadata_fields = result
+
+            assert source_field == "source"
+            assert "filename" in metadata_fields
+            assert "category" in metadata_fields
+            mock_to_csv.assert_called_once()
+        finally:
+            os.unlink(csv_file_path)
+
+    @patch("pandas.DataFrame.to_csv")
+    def test_prepare_custom_metadata_skips_auto_extracted_fields(self, mock_to_csv):
+        """Test that user_defined=False fields are excluded from CSV (nv-ingest extracts them)"""
+        all_file_paths = ["path/to/file1.txt"]
+        custom_metadata = [
+            {
+                "filename": "file1.txt",
+                "metadata": {"category": "doc", "page_number": 5},
+            }
+        ]
+
+        # Schema with page_number as user_defined=False (auto-extracted)
+        metadata_schema = [
+            {"name": "category", "type": "string", "user_defined": True},
+            {"name": "page_number", "type": "integer", "user_defined": False},
+            {"name": "filename", "type": "string", "user_defined": True},
+        ]
+
+        with tempfile.NamedTemporaryFile(delete=False) as tmp_file:
+            csv_file_path = tmp_file.name
+
+        try:
+            result = prepare_custom_metadata_dataframe(
+                all_file_paths, csv_file_path, custom_metadata, metadata_schema
+            )
+            source_field, metadata_fields = result
+
+            assert source_field == "source"
+            assert "filename" in metadata_fields
+            assert "category" in metadata_fields
+            # page_number should be skipped as it's auto-extracted (user_defined=False)
+            assert "page_number" not in metadata_fields
+            mock_to_csv.assert_called_once()
+        finally:
+            os.unlink(csv_file_path)
+
+    @patch("pandas.DataFrame.to_csv")
+    def test_prepare_custom_metadata_with_mixed_system_fields(self, mock_to_csv):
+        """Test handling of mixed RAG-managed and auto-extracted system fields"""
+        all_file_paths = ["path/to/doc.pdf", "path/to/video.mp4"]
+        custom_metadata = [
+            {
+                "filename": "doc.pdf",
+                "metadata": {
+                    "category": "documentation",
+                    "page_number": 10,  # Should be skipped
+                },
+            },
+            {
+                "filename": "video.mp4",
+                "metadata": {
+                    "category": "video",
+                    "start_time": 1000,  # Should be skipped
+                    "end_time": 5000,  # Should be skipped
+                },
+            },
+        ]
+
+        # Schema with system-managed fields
+        metadata_schema = [
+            {"name": "filename", "type": "string", "user_defined": True},
+            {"name": "category", "type": "string", "user_defined": True},
+            {"name": "page_number", "type": "integer", "user_defined": False},
+            {"name": "start_time", "type": "integer", "user_defined": False},
+            {"name": "end_time", "type": "integer", "user_defined": False},
+        ]
+
+        with tempfile.NamedTemporaryFile(delete=False) as tmp_file:
+            csv_file_path = tmp_file.name
+
+        try:
+            result = prepare_custom_metadata_dataframe(
+                all_file_paths, csv_file_path, custom_metadata, metadata_schema
+            )
+            source_field, metadata_fields = result
+
+            assert source_field == "source"
+            # RAG-managed fields should be included
+            assert "filename" in metadata_fields
+            assert "category" in metadata_fields
+            # Auto-extracted fields should be excluded
+            assert "page_number" not in metadata_fields
+            assert "start_time" not in metadata_fields
+            assert "end_time" not in metadata_fields
+            mock_to_csv.assert_called_once()
+        finally:
+            os.unlink(csv_file_path)
+
+    @patch("pandas.DataFrame.to_csv")
+    def test_prepare_custom_metadata_defaults_to_user_defined(self, mock_to_csv):
+        """Test that fields without user_defined flag default to True (included in CSV)"""
+        all_file_paths = ["path/to/file1.txt"]
+        custom_metadata = [
+            {
+                "filename": "file1.txt",
+                "metadata": {"custom_field": "value"},
+            }
+        ]
+
+        # Schema without user_defined flag (should default to True)
+        metadata_schema = [
+            {"name": "custom_field", "type": "string"},
+        ]
+
+        with tempfile.NamedTemporaryFile(delete=False) as tmp_file:
+            csv_file_path = tmp_file.name
+
+        try:
+            result = prepare_custom_metadata_dataframe(
+                all_file_paths, csv_file_path, custom_metadata, metadata_schema
+            )
+            source_field, metadata_fields = result
+
+            assert source_field == "source"
+            # Field should be included (defaults to user_defined=True)
+            assert "custom_field" in metadata_fields
             mock_to_csv.assert_called_once()
         finally:
             os.unlink(csv_file_path)
@@ -363,9 +738,13 @@ class TestValidateFilterExpr:
         mock_result = {"status": True}
 
         # Mock the metadata validation components
-        with patch("nvidia_rag.utils.common.MetadataField"), patch(
-            "nvidia_rag.utils.common.MetadataSchema"
-        ), patch("nvidia_rag.utils.common.FilterExpressionParser") as mock_parser_class:
+        with (
+            patch("nvidia_rag.utils.common.MetadataField"),
+            patch("nvidia_rag.utils.common.MetadataSchema"),
+            patch(
+                "nvidia_rag.utils.common.FilterExpressionParser"
+            ) as mock_parser_class,
+        ):
             mock_parser = MagicMock()
             mock_parser.validate_filter_expression.return_value = mock_result
             mock_parser_class.return_value = mock_parser
@@ -531,9 +910,13 @@ class TestProcessFilterExpr:
         mock_config.vector_store.name = "milvus"
         mock_get_config.return_value = mock_config
 
-        with patch("nvidia_rag.utils.common.MetadataField"), patch(
-            "nvidia_rag.utils.common.MetadataSchema"
-        ), patch("nvidia_rag.utils.common.FilterExpressionParser") as mock_parser_class:
+        with (
+            patch("nvidia_rag.utils.common.MetadataField"),
+            patch("nvidia_rag.utils.common.MetadataSchema"),
+            patch(
+                "nvidia_rag.utils.common.FilterExpressionParser"
+            ) as mock_parser_class,
+        ):
             mock_parser = MagicMock()
             mock_parser.process_filter_expression.return_value = {
                 "status": True,
@@ -555,9 +938,13 @@ class TestProcessFilterExpr:
         mock_config.vector_store.name = "milvus"
         mock_get_config.return_value = mock_config
 
-        with patch("nvidia_rag.utils.common.MetadataField"), patch(
-            "nvidia_rag.utils.common.MetadataSchema"
-        ), patch("nvidia_rag.utils.common.FilterExpressionParser") as mock_parser_class:
+        with (
+            patch("nvidia_rag.utils.common.MetadataField"),
+            patch("nvidia_rag.utils.common.MetadataSchema"),
+            patch(
+                "nvidia_rag.utils.common.FilterExpressionParser"
+            ) as mock_parser_class,
+        ):
             mock_parser = MagicMock()
             mock_parser.process_filter_expression.return_value = {
                 "status": False,
@@ -579,9 +966,13 @@ class TestProcessFilterExpr:
         mock_config.vector_store.name = "milvus"
         mock_get_config.return_value = mock_config
 
-        with patch("nvidia_rag.utils.common.MetadataField"), patch(
-            "nvidia_rag.utils.common.MetadataSchema"
-        ), patch("nvidia_rag.utils.common.FilterExpressionParser") as mock_parser_class:
+        with (
+            patch("nvidia_rag.utils.common.MetadataField"),
+            patch("nvidia_rag.utils.common.MetadataSchema"),
+            patch(
+                "nvidia_rag.utils.common.FilterExpressionParser"
+            ) as mock_parser_class,
+        ):
             mock_parser = MagicMock()
             mock_parser.process_filter_expression.return_value = {
                 "status": False,

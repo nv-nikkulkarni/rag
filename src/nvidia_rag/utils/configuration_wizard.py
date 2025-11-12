@@ -42,7 +42,9 @@ from dataclass_wizard import (
 from dataclass_wizard.models import JSONField
 from dataclass_wizard.utils.string_conv import to_camel_case
 
-configclass = dataclass(frozen=True)
+# Allow config modifications for easier customization
+# Config objects are mutable by default (Pythonic approach)
+configclass = dataclass(frozen=False)
 ENV_BASE = "APP"
 _LOGGER = logging.getLogger(__name__)
 

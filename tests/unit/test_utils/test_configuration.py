@@ -26,19 +26,19 @@ import yaml
 
 from nvidia_rag.utils.configuration import (
     AppConfig,
-    VectorStoreConfig,
-    LLMConfig,
-    ModelParametersConfig,
-    QueryRewriterConfig,
-    TextSplitterConfig,
     EmbeddingConfig,
+    LLMConfig,
+    MinioConfig,
+    ModelParametersConfig,
+    NvIngestConfig,
+    QueryRewriterConfig,
     RankingConfig,
     RetrieverConfig,
-    TracingConfig,
-    VLMConfig,
-    MinioConfig,
     SummarizerConfig,
-    NvIngestConfig,
+    TextSplitterConfig,
+    TracingConfig,
+    VectorStoreConfig,
+    VLMConfig,
 )
 
 
@@ -59,7 +59,6 @@ class TestVectorStoreConfig:
         assert config.search_type == "dense"
         assert config.default_collection_name == "multimodal_data"
 
-
     @patch.dict(os.environ, {}, clear=True)
     def test_environment_variables_custom_names(self):
         """Test custom environment variable names."""
@@ -71,6 +70,7 @@ class TestVectorStoreConfig:
             config = VectorStoreConfig.from_dict({})
 
             assert config.default_collection_name == "test_collection"
+
 
 class TestLLMConfig:
     """Test cases for LLMConfig."""
@@ -87,7 +87,6 @@ class TestLLMConfig:
         assert config.parameters.temperature == 0
         assert config.parameters.top_p == 1.0
 
-
     def test_get_model_parameters_default(self):
         """Test get_model_parameters with default model (nemotron pattern)."""
         config = LLMConfig.from_dict({})
@@ -95,9 +94,11 @@ class TestLLMConfig:
 
         # Default model contains "llama-3.3-nemotron-super-49b" so it triggers nemotron logic
         expected = {
+            "min_tokens": 0,
+            "ignore_eos": False,
             "max_tokens": 32768,
             "temperature": 0,
-            "top_p": 1.0
+            "top_p": 1.0,
         }
         assert params == expected
 
@@ -108,9 +109,11 @@ class TestLLMConfig:
 
         # Generic model should use the base parameter values
         expected = {
+            "min_tokens": 0,
+            "ignore_eos": False,
             "max_tokens": 32768,
             "temperature": 0,
-            "top_p": 1.0
+            "top_p": 1.0,
         }
         assert params == expected
 
@@ -125,7 +128,6 @@ class TestQueryRewriterConfig:
         assert config.model_name == "nvidia/llama-3.3-nemotron-super-49b-v1.5"
         assert config.server_url == ""
         assert config.enable_query_rewriter is False
-
 
 
 class TestTextSplitterConfig:
@@ -204,6 +206,8 @@ class TestSummarizerConfig:
         assert config.server_url == ""
         assert config.max_chunk_length == 50000
         assert config.chunk_overlap == 200
+        assert config.temperature == 0.0
+        assert config.top_p == 1.0
 
     @patch.dict(os.environ, {}, clear=True)
     def test_environment_variables_custom_names(self):
@@ -212,7 +216,9 @@ class TestSummarizerConfig:
             "SUMMARY_LLM": "custom/summarizer-model",
             "SUMMARY_LLM_SERVERURL": "http://summarizer:8080",
             "SUMMARY_LLM_MAX_CHUNK_LENGTH": "75000",
-            "SUMMARY_CHUNK_OVERLAP": "300"
+            "SUMMARY_CHUNK_OVERLAP": "300",
+            "SUMMARY_LLM_TEMPERATURE": "0.5",
+            "SUMMARY_LLM_TOP_P": "0.9",
         }
 
         with patch.dict(os.environ, env_vars):
@@ -222,6 +228,8 @@ class TestSummarizerConfig:
             assert config.server_url == "http://summarizer:8080"
             assert config.max_chunk_length == 75000
             assert config.chunk_overlap == 300
+            assert config.temperature == 0.5
+            assert config.top_p == 0.9
 
 
 class TestNvIngestConfig:
@@ -244,7 +252,10 @@ class TestNvIngestConfig:
         assert config.chunk_size == 1024
         assert config.chunk_overlap == 150
         assert config.caption_model_name == "nvidia/llama-3.1-nemotron-nano-vl-8b-v1"
-        assert config.caption_endpoint_url == "https://integrate.api.nvidia.com/v1/chat/completions"
+        assert (
+            config.caption_endpoint_url
+            == "https://integrate.api.nvidia.com/v1/chat/completions"
+        )
         assert config.enable_pdf_splitter is True
 
 
@@ -282,7 +293,7 @@ class TestAppConfig:
             "ENABLE_GUARDRAILS": "true",
             "ENABLE_CITATIONS": "false",
             "ENABLE_VLM_INFERENCE": "true",
-            "TEMP_DIR": "/custom/temp"
+            "TEMP_DIR": "/custom/temp",
         }
 
         with patch.dict(os.environ, env_vars):
@@ -300,7 +311,7 @@ class TestAppConfig:
             "APP_VECTORSTORE_NAME": "custom_vectorstore",
             "APP_LLM_MODELNAME": "custom/llm-model",
             "ENABLE_RERANKER": "false",
-            "MINIO_ENDPOINT": "custom-minio:9000"
+            "MINIO_ENDPOINT": "custom-minio:9000",
         }
 
         with patch.dict(os.environ, env_vars):
@@ -314,17 +325,11 @@ class TestAppConfig:
     def test_from_dict_nested_structure(self):
         """Test loading from dictionary with nested structure."""
         data = {
-            "vectorStore": {
-                "name": "elasticsearch",
-                "url": "http://es:9200"
-            },
-            "llm": {
-                "modelName": "custom/model",
-                "serverUrl": "http://llm:8080"
-            },
+            "vectorStore": {"name": "elasticsearch", "url": "http://es:9200"},
+            "llm": {"modelName": "custom/model", "serverUrl": "http://llm:8080"},
             "enableGuardrails": True,
             "enableCitations": False,
-            "tempDir": "/custom/temp"
+            "tempDir": "/custom/temp",
         }
 
         config = AppConfig.from_dict(data)
@@ -337,6 +342,7 @@ class TestAppConfig:
         assert config.enable_citations is False
         assert config.temp_dir == "/custom/temp"
 
+
 class TestConfigurationIntegration:
     """Integration tests for the complete configuration system."""
 
@@ -348,25 +354,21 @@ class TestConfigurationIntegration:
             # Vector store config
             "APP_VECTORSTORE_NAME": "elasticsearch",
             "COLLECTION_NAME": "test_collection",
-
             # LLM config
             "APP_LLM_MODELNAME": "custom/llm-model",
             "APP_LLM_SERVERURL": "http://llm:8080",
-
             # Feature flags
             "ENABLE_GUARDRAILS": "true",
             "ENABLE_CITATIONS": "false",
             "ENABLE_RERANKER": "false",
             "ENABLE_VLM_INFERENCE": "true",
-
             # Minio config
             "MINIO_ENDPOINT": "minio.example.com:9000",
             "MINIO_ACCESSKEY": "test_key",
             "MINIO_SECRETKEY": "test_secret",
-
             # Other configs
             "TEMP_DIR": "/custom/temp",
-            "VECTOR_DB_TOPK": "50"
+            "VECTOR_DB_TOPK": "50",
         }
 
         with patch.dict(os.environ, env_vars):

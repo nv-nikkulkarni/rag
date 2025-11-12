@@ -160,7 +160,9 @@ ingestor-server:
 
 If you require GPU index-building, ensure the Milvus image variant supports GPU (for example, keep a `-gpu` tag where applicable). `rag-server` can be deployed with either CPU or GPU images for inference; search will be served on CPU for collections indexed with GPU when `APP_VECTORSTORE_ENABLEGPUSEARCH` is set to `False`.
 
-Note: When `adapt_for_cpu` is in effect, your search requests must supply an `ef` parameter.
+:::{note}
+When `adapt_for_cpu` is in effect, your search requests must supply an `ef` parameter.
+:::
 
 
 ## (Optional) Customize the Milvus Endpoint
@@ -202,8 +204,114 @@ To use a custom Milvus endpoint, use the following procedure.
 3. Redeploy the Helm chart by running the following code.
 
    ```sh
-   helm upgrade rag https://helm.ngc.nvidia.com/nvidia/blueprint/charts/nvidia-blueprint-rag-v2.3.0.tgz -f nvidia-blueprint-rag/values.yaml -n rag
+   helm upgrade rag https://helm.ngc.nvidia.com/0648981100760671/charts/nvidia-blueprint-rag-v2.4.0-dev-dev.tgz -f nvidia-blueprint-rag/values.yaml -n rag
    ```
+
+
+## Milvus Authentication
+
+Enable authentication for Milvus to secure your vector database.
+
+### Docker Compose
+
+#### 1. Configure Milvus Authentication
+
+Extract the default Milvus configuration:
+```bash
+docker cp milvus-standalone:/milvus/configs/milvus.yaml ./deploy/compose/
+```
+
+Edit `deploy/compose/milvus.yaml` to enable authentication:
+```yaml
+security:
+  authorizationEnabled: true
+  defaultRootPassword: "your-secure-password"
+```
+
+Mount the configuration file in `deploy/compose/vectordb.yaml` by uncommenting the volume mount:
+```yaml
+volumes:
+  - ${DOCKER_VOLUME_DIRECTORY:-.}/volumes/milvus:/var/lib/milvus
+  - ${MILVUS_CONFIG_FILE:-./milvus.yaml}:/milvus/configs/milvus.yaml
+```
+
+
+#### 2. Start Services
+
+Start Milvus with authentication:
+```bash
+docker compose -f deploy/compose/vectordb.yaml up -d
+```
+
+Set authentication credentials and start RAG services:
+```bash
+export APP_VECTORSTORE_USERNAME="root"
+export APP_VECTORSTORE_PASSWORD="your-secure-password"
+
+docker compose -f deploy/compose/docker-compose-ingestor-server.yaml up -d
+docker compose -f deploy/compose/docker-compose-rag-server.yaml up -d
+```
+
+### Helm Chart
+
+#### 1. Configure Milvus Authentication in Helm:
+
+Configure Milvus Authentication
+
+Edit `deploy/helm/nvidia-blueprint-rag/files/milvus.yaml` to enable authentication:
+```yaml
+security:
+  authorizationEnabled: true
+  defaultRootPassword: "your-secure-password"
+```
+
+Create a ConfigMap from the milvus.yaml file:
+```bash
+kubectl create configmap milvus-config --from-file=milvus.yaml=deploy/helm/nvidia-blueprint-rag/files/milvus.yaml
+```
+
+Configure Volume Mounting
+
+The `values.yaml` file includes the necessary volume configuration:
+```yaml
+milvus:
+  standalone:
+    extraVolumes:
+      - name: milvus-config
+        configMap:
+          name: milvus-config
+    extraVolumeMounts:
+      - name: milvus-config
+        mountPath: /milvus/configs/milvus.yaml
+        subPath: milvus.yaml
+```
+
+#### 2. Configure username and password in `deploy/helm/nvidia-blueprint-rag/values.yaml`:
+
+```yaml
+rag-server:
+  envVars:
+    APP_VECTORSTORE_USERNAME: "root"
+    APP_VECTORSTORE_PASSWORD: "your-secure-password"
+
+ingestor-server:
+  envVars:
+    APP_VECTORSTORE_USERNAME: "root"
+    APP_VECTORSTORE_PASSWORD: "your-secure-password"
+```
+
+#### 3. Deploy with Helm:
+```bash
+helm upgrade --install rag -n rag https://helm.ngc.nvidia.com/0648981100760671/charts/nvidia-blueprint-rag-v2.4.0-dev-dev-rc2.tgz \
+--username '$oauthtoken' \
+--password "${NGC_API_KEY}" \
+--set imagePullSecret.password=$NGC_API_KEY \
+--set ngcApiSecret.password=$NGC_API_KEY \
+-f deploy/helm/nvidia-blueprint-rag/values.yaml
+```
+
+For detailed HELM deployment instructions, see [Helm Deployment Guide](deploy-helm.md).
+
 
 ## Troubleshooting
 
@@ -228,9 +336,9 @@ If you encounter GPU_CAGRA errors that cannot be resolved by when switching to C
    docker compose -f deploy/compose/docker-compose-ingestor-server.yaml up -d
    ```
 
-[!NOTE]
+:::{note}
 This will delete all existing vector data, so ensure you have backups if needed.
-
+:::
 
 
 ## Related Topics

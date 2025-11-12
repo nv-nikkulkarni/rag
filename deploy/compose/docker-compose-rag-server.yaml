@@ -3,7 +3,7 @@ services:
   # Main orchestrator server which stiches together all calls to different services to fulfill the user request
   rag-server:
     container_name: rag-server
-    image: nvcr.io/nvidia/blueprint/rag-server:${TAG:-2.3.0}
+    image: nvcr.io/0648981100760671/rag-server:${TAG:-latest}
     build:
       # Set context to repo's root directory
       context: ../../
@@ -41,6 +41,15 @@ services:
       APP_VECTORSTORE_ENABLEGPUSEARCH: ${APP_VECTORSTORE_ENABLEGPUSEARCH:-True}
       # ef: Parameter controlling query time/accuracy trade-off. Higher ef leads to more accurate but slower search.
       APP_VECTORSTORE_EF: ${APP_VECTORSTORE_EF:-100} # Must be greater or equal to VECTOR_DB_TOPK
+      # Username for vector store 
+      APP_VECTORSTORE_USERNAME: ${APP_VECTORSTORE_USERNAME:-""}
+      # Password for vector store
+      APP_VECTORSTORE_PASSWORD: ${APP_VECTORSTORE_PASSWORD:-""}
+      # Elasticsearch API key auth (optional). Prefer these over username/password when set.
+      # Provide either base64 APP_VECTORSTORE_APIKEY or split ID/SECRET.
+      APP_VECTORSTORE_APIKEY_ID: ${APP_VECTORSTORE_APIKEY_ID:-""}
+      APP_VECTORSTORE_APIKEY_SECRET: ${APP_VECTORSTORE_APIKEY_SECRET:-""}
+      APP_VECTORSTORE_APIKEY: ${APP_VECTORSTORE_APIKEY:-""}
       # vectorstore collection name to store embeddings
       COLLECTION_NAME: ${COLLECTION_NAME:-multimodal_data}
       APP_RETRIEVER_SCORETHRESHOLD: 0.25
@@ -72,6 +81,7 @@ services:
       # url on which embedding model is hosted. If "", Nvidia hosted API is used
       APP_EMBEDDINGS_SERVERURL: ${APP_EMBEDDINGS_SERVERURL-"nemoretriever-embedding-ms:8000"}
       APP_EMBEDDINGS_MODELNAME: ${APP_EMBEDDINGS_MODELNAME:-nvidia/llama-3.2-nv-embedqa-1b-v2}
+      APP_EMBEDDINGS_DIMENSIONS: ${APP_EMBEDDINGS_DIMENSIONS:-2048}
       # For VLM Embedding Model (Nemoretriever-1b-vlm-embed-v1)
       # APP_EMBEDDINGS_SERVERURL: ${APP_EMBEDDINGS_SERVERURL-"nemoretriever-vlm-embedding-ms:8000"}
       # APP_EMBEDDINGS_MODELNAME: ${APP_EMBEDDINGS_MODELNAME:-nvidia/llama-3.2-nemoretriever-1b-vlm-embed-v1}
@@ -102,10 +112,6 @@ services:
       APP_VLM_MODELNAME: ${APP_VLM_MODELNAME:-"nvidia/llama-3.1-nemotron-nano-vl-8b-v1"}
 
       NVIDIA_API_KEY: ${NGC_API_KEY:?"NGC_API_KEY is required"}
-
-      # Set LLM_API_KEY if non-NVIDIA hosted LLM API endpoint is being used
-      # If not set, NVIDIA_API_KEY will be used as fallback
-      LLM_API_KEY: ${LLM_API_KEY:-""}
 
       # Number of document chunks to insert in LLM prompt, used only when ENABLE_RERANKER is set to True
       APP_RETRIEVER_TOPK: ${APP_RETRIEVER_TOPK:-10}
@@ -170,7 +176,7 @@ services:
   # Sample UI container which interacts with APIs exposed by rag-server container
   rag-frontend:
     container_name: rag-frontend
-    image: nvcr.io/nvidia/blueprint/rag-frontend:${TAG:-2.3.0}
+    image: nvcr.io/0648981100760671/rag-frontend:${TAG:-latest}
     build:
       # Set context to repo's root directory
       context: ../../frontend

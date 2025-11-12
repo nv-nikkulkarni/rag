@@ -17,11 +17,11 @@ import base64
 import io
 import os
 import re
-from unittest.mock import Mock, patch, MagicMock
-from PIL import Image as PILImage
+from unittest.mock import MagicMock, Mock, patch
 
 import pytest
 from langchain_core.messages import HumanMessage
+from PIL import Image as PILImage
 
 from nvidia_rag.rag_server.vlm import VLM
 
@@ -37,13 +37,15 @@ class TestVLM:
     def teardown_method(self):
         """Clean up after each test"""
         import gc
+
         gc.collect()
         # Clear any remaining mocks
         import unittest.mock
+
         unittest.mock.patch.stopall()
 
-    @patch('nvidia_rag.rag_server.vlm.get_config')
-    @patch('nvidia_rag.rag_server.vlm.get_prompts')
+    @patch("nvidia_rag.utils.common.get_config")
+    @patch("nvidia_rag.rag_server.vlm.get_prompts")
     def test_vlm_init_success(self, mock_get_prompts, mock_get_config):
         """Test VLM initialization with valid parameters"""
         mock_get_config.return_value = Mock()
@@ -54,7 +56,7 @@ class TestVLM:
 
         mock_prompts = {
             "vlm_template": "Test template: {question}",
-            "vlm_response_reasoning_template": {"system": "test", "human": "test"}
+            "vlm_response_reasoning_template": {"system": "test", "human": "test"},
         }
         mock_get_prompts.return_value = mock_prompts
 
@@ -64,47 +66,58 @@ class TestVLM:
         assert vlm.invoke_url == self.vlm_endpoint
         assert vlm.vlm_template == "Test template: {question}"
 
-    @patch('nvidia_rag.rag_server.vlm.get_config')
-    @patch('nvidia_rag.rag_server.vlm.get_prompts')
+    @patch("nvidia_rag.utils.common.get_config")
+    @patch("nvidia_rag.rag_server.vlm.get_prompts")
     def test_vlm_init_missing_url(self, mock_get_prompts, mock_get_config):
         """Test VLM initialization with missing URL raises OSError"""
         mock_get_config.return_value = Mock()
         mock_get_prompts.return_value = {}
 
-        with pytest.raises(OSError, match="VLM server URL and model name must be set in the environment."):
+        with pytest.raises(
+            OSError,
+            match="VLM server URL and model name must be set in the environment.",
+        ):
             VLM("", self.vlm_endpoint)
 
-    @patch('nvidia_rag.rag_server.vlm.get_config')
-    @patch('nvidia_rag.rag_server.vlm.get_prompts')
+    @patch("nvidia_rag.utils.common.get_config")
+    @patch("nvidia_rag.rag_server.vlm.get_prompts")
     def test_vlm_init_missing_model(self, mock_get_prompts, mock_get_config):
         """Test VLM initialization with missing model raises OSError"""
         mock_get_config.return_value = Mock()
         mock_get_prompts.return_value = {}
 
-        with pytest.raises(OSError, match="VLM server URL and model name must be set in the environment."):
+        with pytest.raises(
+            OSError,
+            match="VLM server URL and model name must be set in the environment.",
+        ):
             VLM(self.vlm_model, "")
 
-    @patch('nvidia_rag.rag_server.vlm.get_config')
-    @patch('nvidia_rag.rag_server.vlm.get_prompts')
+    @patch("nvidia_rag.utils.common.get_config")
+    @patch("nvidia_rag.rag_server.vlm.get_prompts")
     def test_vlm_init_none_url(self, mock_get_prompts, mock_get_config):
         """Test VLM initialization with None URL raises OSError"""
         mock_get_config.return_value = Mock()
         mock_get_prompts.return_value = {}
 
-        with pytest.raises(OSError, match="VLM server URL and model name must be set in the environment."):
+        with pytest.raises(
+            OSError,
+            match="VLM server URL and model name must be set in the environment.",
+        ):
             VLM(self.vlm_model, None)
 
     def create_test_image_b64(self):
         """Create a test base64 encoded image"""
-        img = PILImage.new('RGB', (100, 100), color='red')
+        img = PILImage.new("RGB", (100, 100), color="red")
         buffer = io.BytesIO()
-        img.save(buffer, format='PNG')
-        return base64.b64encode(buffer.getvalue()).decode('utf-8')
+        img.save(buffer, format="PNG")
+        return base64.b64encode(buffer.getvalue()).decode("utf-8")
 
-    @patch('nvidia_rag.rag_server.vlm.get_config')
-    @patch('nvidia_rag.rag_server.vlm.get_prompts')
-    @patch('nvidia_rag.rag_server.vlm.ChatOpenAI')
-    def test_analyze_image_no_images(self, mock_chat_openai, mock_get_prompts, mock_get_config):
+    @patch("nvidia_rag.utils.common.get_config")
+    @patch("nvidia_rag.rag_server.vlm.get_prompts")
+    @patch("nvidia_rag.rag_server.vlm.ChatOpenAI")
+    def test_analyze_image_no_images(
+        self, mock_chat_openai, mock_get_prompts, mock_get_config
+    ):
         """Test analyze_image with no images returns empty string"""
         mock_get_config.return_value = Mock()
         mock_get_config.return_value.vlm = Mock()
@@ -113,7 +126,7 @@ class TestVLM:
         mock_get_config.return_value.vlm.max_context_images = 2
         mock_get_prompts.return_value = {
             "vlm_template": "Test template: {question}",
-            "vlm_response_reasoning_template": {"system": "test", "human": "test"}
+            "vlm_response_reasoning_template": {"system": "test", "human": "test"},
         }
 
         vlm = VLM(self.vlm_model, self.vlm_endpoint)
@@ -121,10 +134,12 @@ class TestVLM:
 
         assert result == ""
 
-    @patch('nvidia_rag.rag_server.vlm.get_config')
-    @patch('nvidia_rag.rag_server.vlm.get_prompts')
-    @patch('nvidia_rag.rag_server.vlm.ChatOpenAI')
-    def test_analyze_image_success(self, mock_chat_openai, mock_get_prompts, mock_get_config):
+    @patch("nvidia_rag.utils.common.get_config")
+    @patch("nvidia_rag.rag_server.vlm.get_prompts")
+    @patch("nvidia_rag.rag_server.vlm.ChatOpenAI")
+    def test_analyze_image_success(
+        self, mock_chat_openai, mock_get_prompts, mock_get_config
+    ):
         """Test analyze_image with valid images returns VLM response"""
         mock_get_config.return_value = Mock()
         mock_get_config.return_value.vlm = Mock()
@@ -133,7 +148,7 @@ class TestVLM:
         mock_get_config.return_value.vlm.max_context_images = 2
         mock_get_prompts.return_value = {
             "vlm_template": "Test template: {question}",
-            "vlm_response_reasoning_template": {"system": "test", "human": "test"}
+            "vlm_response_reasoning_template": {"system": "test", "human": "test"},
         }
 
         mock_vlm_instance = Mock()
@@ -147,10 +162,12 @@ class TestVLM:
         assert result == "Test VLM response"
         mock_vlm_instance.invoke.assert_called_once()
 
-    @patch('nvidia_rag.rag_server.vlm.get_config')
-    @patch('nvidia_rag.rag_server.vlm.get_prompts')
-    @patch('nvidia_rag.rag_server.vlm.ChatOpenAI')
-    def test_analyze_image_exception_handling(self, mock_chat_openai, mock_get_prompts, mock_get_config):
+    @patch("nvidia_rag.utils.common.get_config")
+    @patch("nvidia_rag.rag_server.vlm.get_prompts")
+    @patch("nvidia_rag.rag_server.vlm.ChatOpenAI")
+    def test_analyze_image_exception_handling(
+        self, mock_chat_openai, mock_get_prompts, mock_get_config
+    ):
         """Test analyze_image handles exceptions gracefully"""
         mock_get_config.return_value = Mock()
         mock_get_config.return_value.vlm = Mock()
@@ -159,7 +176,7 @@ class TestVLM:
         mock_get_config.return_value.vlm.max_context_images = 2
         mock_get_prompts.return_value = {
             "vlm_template": "Test template: {question}",
-            "vlm_response_reasoning_template": {"system": "test", "human": "test"}
+            "vlm_response_reasoning_template": {"system": "test", "human": "test"},
         }
 
         mock_vlm_instance = Mock()
@@ -173,10 +190,12 @@ class TestVLM:
         with pytest.raises(Exception, match="VLM error"):
             vlm.analyze_image([test_image], "test question")
 
-    @patch('nvidia_rag.rag_server.vlm.get_config')
-    @patch('nvidia_rag.rag_server.vlm.get_prompts')
-    @patch('nvidia_rag.rag_server.vlm.ChatOpenAI')
-    def test_analyze_image_config_limits_exceeded(self, mock_chat_openai, mock_get_prompts, mock_get_config):
+    @patch("nvidia_rag.utils.common.get_config")
+    @patch("nvidia_rag.rag_server.vlm.get_prompts")
+    @patch("nvidia_rag.rag_server.vlm.ChatOpenAI")
+    def test_analyze_image_config_limits_exceeded(
+        self, mock_chat_openai, mock_get_prompts, mock_get_config
+    ):
         """Test analyze_image when config limits are exceeded"""
         mock_get_config.return_value = Mock()
         mock_get_config.return_value.vlm = Mock()
@@ -185,7 +204,7 @@ class TestVLM:
         mock_get_config.return_value.vlm.max_context_images = 2
         mock_get_prompts.return_value = {
             "vlm_template": "Test template: {question}",
-            "vlm_response_reasoning_template": {"system": "test", "human": "test"}
+            "vlm_response_reasoning_template": {"system": "test", "human": "test"},
         }
 
         # Mock ChatOpenAI to avoid API key issues
@@ -200,13 +219,14 @@ class TestVLM:
 
     def test_convert_image_url_to_png_b64_data_url(self):
         """Test _convert_image_url_to_png_b64 with data URL"""
-        with patch('nvidia_rag.rag_server.vlm.get_config') as mock_get_config, \
-             patch('nvidia_rag.rag_server.vlm.get_prompts') as mock_get_prompts:
-
+        with (
+            patch("nvidia_rag.utils.common.get_config") as mock_get_config,
+            patch("nvidia_rag.rag_server.vlm.get_prompts") as mock_get_prompts,
+        ):
             mock_get_config.return_value = Mock()
             mock_get_prompts.return_value = {
                 "vlm_template": "Test template: {question}",
-                "vlm_response_reasoning_template": {"system": "test", "human": "test"}
+                "vlm_response_reasoning_template": {"system": "test", "human": "test"},
             }
 
             vlm = VLM(self.vlm_model, self.vlm_endpoint)
@@ -219,13 +239,14 @@ class TestVLM:
 
     def test_convert_image_url_to_png_b64_base64_string(self):
         """Test _convert_image_url_to_png_b64 with base64 string"""
-        with patch('nvidia_rag.rag_server.vlm.get_config') as mock_get_config, \
-             patch('nvidia_rag.rag_server.vlm.get_prompts') as mock_get_prompts:
-
+        with (
+            patch("nvidia_rag.utils.common.get_config") as mock_get_config,
+            patch("nvidia_rag.rag_server.vlm.get_prompts") as mock_get_prompts,
+        ):
             mock_get_config.return_value = Mock()
             mock_get_prompts.return_value = {
                 "vlm_template": "Test template: {question}",
-                "vlm_response_reasoning_template": {"system": "test", "human": "test"}
+                "vlm_response_reasoning_template": {"system": "test", "human": "test"},
             }
 
             vlm = VLM(self.vlm_model, self.vlm_endpoint)
@@ -237,13 +258,14 @@ class TestVLM:
 
     def test_convert_image_url_to_png_b64_invalid_data_url(self):
         """Test _convert_image_url_to_png_b64 with invalid data URL"""
-        with patch('nvidia_rag.rag_server.vlm.get_config') as mock_get_config, \
-             patch('nvidia_rag.rag_server.vlm.get_prompts') as mock_get_prompts:
-
+        with (
+            patch("nvidia_rag.utils.common.get_config") as mock_get_config,
+            patch("nvidia_rag.rag_server.vlm.get_prompts") as mock_get_prompts,
+        ):
             mock_get_config.return_value = Mock()
             mock_get_prompts.return_value = {
                 "vlm_template": "Test template: {question}",
-                "vlm_response_reasoning_template": {"system": "test", "human": "test"}
+                "vlm_response_reasoning_template": {"system": "test", "human": "test"},
             }
 
             vlm = VLM(self.vlm_model, self.vlm_endpoint)
@@ -254,13 +276,14 @@ class TestVLM:
 
     def test_convert_image_url_to_png_b64_exception_handling(self):
         """Test _convert_image_url_to_png_b64 handles exceptions"""
-        with patch('nvidia_rag.rag_server.vlm.get_config') as mock_get_config, \
-             patch('nvidia_rag.rag_server.vlm.get_prompts') as mock_get_prompts:
-
+        with (
+            patch("nvidia_rag.utils.common.get_config") as mock_get_config,
+            patch("nvidia_rag.rag_server.vlm.get_prompts") as mock_get_prompts,
+        ):
             mock_get_config.return_value = Mock()
             mock_get_prompts.return_value = {
                 "vlm_template": "Test template: {question}",
-                "vlm_response_reasoning_template": {"system": "test", "human": "test"}
+                "vlm_response_reasoning_template": {"system": "test", "human": "test"},
             }
 
             vlm = VLM(self.vlm_model, self.vlm_endpoint)
@@ -271,13 +294,14 @@ class TestVLM:
 
     def test_add_image_urls(self):
         """Test _add_image_urls method"""
-        with patch('nvidia_rag.rag_server.vlm.get_config') as mock_get_config, \
-             patch('nvidia_rag.rag_server.vlm.get_prompts') as mock_get_prompts:
-
+        with (
+            patch("nvidia_rag.utils.common.get_config") as mock_get_config,
+            patch("nvidia_rag.rag_server.vlm.get_prompts") as mock_get_prompts,
+        ):
             mock_get_config.return_value = Mock()
             mock_get_prompts.return_value = {
                 "vlm_template": "Test template: {question}",
-                "vlm_response_reasoning_template": {"system": "test", "human": "test"}
+                "vlm_response_reasoning_template": {"system": "test", "human": "test"},
             }
 
             vlm = VLM(self.vlm_model, self.vlm_endpoint)
@@ -290,9 +314,11 @@ class TestVLM:
             assert message.content[1]["type"] == "image_url"
             assert "data:image/png;base64," in message.content[1]["image_url"]["url"]
 
-    @patch('nvidia_rag.rag_server.vlm.get_config')
-    @patch('nvidia_rag.rag_server.vlm.get_prompts')
-    def test_analyze_images_from_context_no_docs(self, mock_get_prompts, mock_get_config):
+    @patch("nvidia_rag.utils.common.get_config")
+    @patch("nvidia_rag.rag_server.vlm.get_prompts")
+    def test_analyze_images_from_context_no_docs(
+        self, mock_get_prompts, mock_get_config
+    ):
         """Test analyze_images_from_context with no documents"""
         mock_get_config.return_value = Mock()
         mock_get_config.return_value.vlm = Mock()
@@ -301,7 +327,7 @@ class TestVLM:
         mock_get_config.return_value.vlm.max_context_images = 2
         mock_get_prompts.return_value = {
             "vlm_template": "Test template: {question}",
-            "vlm_response_reasoning_template": {"system": "test", "human": "test"}
+            "vlm_response_reasoning_template": {"system": "test", "human": "test"},
         }
 
         vlm = VLM(self.vlm_model, self.vlm_endpoint)
@@ -309,10 +335,12 @@ class TestVLM:
 
         assert result == ""
 
-    @patch('nvidia_rag.rag_server.vlm.get_config')
-    @patch('nvidia_rag.rag_server.vlm.get_prompts')
-    @patch('nvidia_rag.rag_server.vlm.get_minio_operator')
-    def test_analyze_images_from_context_with_docs(self, mock_get_minio, mock_get_prompts, mock_get_config):
+    @patch("nvidia_rag.utils.common.get_config")
+    @patch("nvidia_rag.rag_server.vlm.get_prompts")
+    @patch("nvidia_rag.rag_server.vlm.get_minio_operator")
+    def test_analyze_images_from_context_with_docs(
+        self, mock_get_minio, mock_get_prompts, mock_get_config
+    ):
         """Test analyze_images_from_context with documents"""
         mock_get_config.return_value = Mock()
         mock_get_config.return_value.vlm = Mock()
@@ -321,7 +349,7 @@ class TestVLM:
         mock_get_config.return_value.vlm.max_context_images = 2
         mock_get_prompts.return_value = {
             "vlm_template": "Test template: {question}",
-            "vlm_response_reasoning_template": {"system": "test", "human": "test"}
+            "vlm_response_reasoning_template": {"system": "test", "human": "test"},
         }
 
         # Mock MinIO operator
@@ -335,22 +363,26 @@ class TestVLM:
         mock_doc.metadata = {
             "content_metadata": {"type": "image", "page_number": 1, "location": "test"},
             "collection_name": "test_collection",
-            "source": {"source_id": "test.pdf"}
+            "source": {"source_id": "test.pdf"},
         }
 
         vlm = VLM(self.vlm_model, self.vlm_endpoint)
 
-        with patch('nvidia_rag.rag_server.vlm.get_unique_thumbnail_id') as mock_get_thumbnail_id:
+        with patch('nvidia_rag.rag_server.vlm.get_unique_thumbnail_id_from_result') as mock_get_thumbnail_id:
             mock_get_thumbnail_id.return_value = "test_thumbnail_id"
-            with patch.object(vlm, 'analyze_image', return_value="VLM response") as mock_analyze:
+            with patch.object(
+                vlm, "analyze_image", return_value="VLM response"
+            ) as mock_analyze:
                 result = vlm.analyze_images_from_context([mock_doc], "test question")
 
                 assert result == "VLM response"
                 mock_analyze.assert_called_once()
 
-    @patch('nvidia_rag.rag_server.vlm.get_config')
-    @patch('nvidia_rag.rag_server.vlm.get_prompts')
-    def test_analyze_images_from_context_with_query_images(self, mock_get_prompts, mock_get_config):
+    @patch("nvidia_rag.utils.common.get_config")
+    @patch("nvidia_rag.rag_server.vlm.get_prompts")
+    def test_analyze_images_from_context_with_query_images(
+        self, mock_get_prompts, mock_get_config
+    ):
         """Test analyze_images_from_context with query images"""
         mock_get_config.return_value = Mock()
         mock_get_config.return_value.vlm = Mock()
@@ -359,7 +391,7 @@ class TestVLM:
         mock_get_config.return_value.vlm.max_context_images = 2
         mock_get_prompts.return_value = {
             "vlm_template": "Test template: {question}",
-            "vlm_response_reasoning_template": {"system": "test", "human": "test"}
+            "vlm_response_reasoning_template": {"system": "test", "human": "test"},
         }
 
         vlm = VLM(self.vlm_model, self.vlm_endpoint)
@@ -367,7 +399,10 @@ class TestVLM:
 
         query_with_images = [
             {"type": "text", "text": "What is this?"},
-            {"type": "image_url", "image_url": {"url": f"data:image/png;base64,{test_image}"}}
+            {
+                "type": "image_url",
+                "image_url": {"url": f"data:image/png;base64,{test_image}"},
+            },
         ]
 
         result = vlm.analyze_images_from_context([], query_with_images)
@@ -375,15 +410,17 @@ class TestVLM:
         # When no documents are provided, function returns empty string
         assert result == ""
 
-    @patch('nvidia_rag.rag_server.vlm.get_config')
-    @patch('nvidia_rag.rag_server.vlm.get_prompts')
-    @patch('nvidia_rag.rag_server.vlm.get_llm')
-    def test_reason_on_vlm_response_empty_response(self, mock_get_llm, mock_get_prompts, mock_get_config):
+    @patch("nvidia_rag.utils.common.get_config")
+    @patch("nvidia_rag.rag_server.vlm.get_prompts")
+    @patch("nvidia_rag.rag_server.vlm.get_llm")
+    def test_reason_on_vlm_response_empty_response(
+        self, mock_get_llm, mock_get_prompts, mock_get_config
+    ):
         """Test reason_on_vlm_response with empty response"""
         mock_get_config.return_value = Mock()
         mock_get_prompts.return_value = {
             "vlm_template": "Test template: {question}",
-            "vlm_response_reasoning_template": {"system": "test", "human": "test"}
+            "vlm_response_reasoning_template": {"system": "test", "human": "test"},
         }
 
         vlm = VLM(self.vlm_model, self.vlm_endpoint)
@@ -391,23 +428,28 @@ class TestVLM:
 
         assert result is False
 
-    @patch('nvidia_rag.rag_server.vlm.get_config')
-    @patch('nvidia_rag.rag_server.vlm.get_prompts')
-    def test_reason_on_vlm_response_use_verdict(self, mock_get_prompts, mock_get_config):
+    @patch("nvidia_rag.utils.common.get_config")
+    @patch("nvidia_rag.rag_server.vlm.get_prompts")
+    def test_reason_on_vlm_response_use_verdict(
+        self, mock_get_prompts, mock_get_config
+    ):
         """Test reason_on_vlm_response with USE verdict"""
         mock_get_config.return_value = Mock()
         mock_get_prompts.return_value = {
             "vlm_template": "Test template: {question}",
-            "vlm_response_reasoning_template": {"system": "test", "human": "test"}
+            "vlm_response_reasoning_template": {"system": "test", "human": "test"},
         }
 
         vlm = VLM(self.vlm_model, self.vlm_endpoint)
 
         # Mock the entire chain creation process
-        with patch('nvidia_rag.rag_server.vlm.get_llm') as mock_get_llm, \
-             patch('nvidia_rag.rag_server.vlm.ChatPromptTemplate') as mock_prompt_template, \
-             patch('nvidia_rag.rag_server.vlm.StrOutputParser') as mock_parser_class:
-
+        with (
+            patch("nvidia_rag.rag_server.vlm.get_llm") as mock_get_llm,
+            patch(
+                "nvidia_rag.rag_server.vlm.ChatPromptTemplate"
+            ) as mock_prompt_template,
+            patch("nvidia_rag.rag_server.vlm.StrOutputParser") as mock_parser_class,
+        ):
             # Create a mock chain that returns our expected result
             mock_chain = Mock()
             mock_chain.invoke.return_value = "USE the response"
@@ -436,7 +478,9 @@ class TestVLM:
                     return self
 
             # Replace the mocks with our custom chain
-            mock_prompt_template.from_messages.return_value = MockChain("USE the response")
+            mock_prompt_template.from_messages.return_value = MockChain(
+                "USE the response"
+            )
             mock_get_llm.return_value = MockChain("USE the response")
             mock_parser_class.return_value = MockChain("USE the response")
 
@@ -444,23 +488,28 @@ class TestVLM:
 
         assert result is True
 
-    @patch('nvidia_rag.rag_server.vlm.get_config')
-    @patch('nvidia_rag.rag_server.vlm.get_prompts')
-    def test_reason_on_vlm_response_dont_use_verdict(self, mock_get_prompts, mock_get_config):
+    @patch("nvidia_rag.utils.common.get_config")
+    @patch("nvidia_rag.rag_server.vlm.get_prompts")
+    def test_reason_on_vlm_response_dont_use_verdict(
+        self, mock_get_prompts, mock_get_config
+    ):
         """Test reason_on_vlm_response with non-USE verdict"""
         mock_get_config.return_value = Mock()
         mock_get_prompts.return_value = {
             "vlm_template": "Test template: {question}",
-            "vlm_response_reasoning_template": {"system": "test", "human": "test"}
+            "vlm_response_reasoning_template": {"system": "test", "human": "test"},
         }
 
         vlm = VLM(self.vlm_model, self.vlm_endpoint)
 
         # Mock the entire chain creation process
-        with patch('nvidia_rag.rag_server.vlm.get_llm') as mock_get_llm, \
-             patch('nvidia_rag.rag_server.vlm.ChatPromptTemplate') as mock_prompt_template, \
-             patch('nvidia_rag.rag_server.vlm.StrOutputParser') as mock_parser_class:
-
+        with (
+            patch("nvidia_rag.rag_server.vlm.get_llm") as mock_get_llm,
+            patch(
+                "nvidia_rag.rag_server.vlm.ChatPromptTemplate"
+            ) as mock_prompt_template,
+            patch("nvidia_rag.rag_server.vlm.StrOutputParser") as mock_parser_class,
+        ):
             # Create a custom class that supports the | operator
             class MockChain:
                 def __init__(self, invoke_return_value):
@@ -473,10 +522,157 @@ class TestVLM:
                     return self
 
             # Replace the mocks with our custom chain
-            mock_prompt_template.from_messages.return_value = MockChain("REJECT the response")
+            mock_prompt_template.from_messages.return_value = MockChain(
+                "REJECT the response"
+            )
             mock_get_llm.return_value = MockChain("REJECT the response")
             mock_parser_class.return_value = MockChain("REJECT the response")
 
             result = vlm.reason_on_vlm_response("question", "VLM response", [], {})
 
         assert result is False
+
+    @patch('nvidia_rag.utils.common.get_config')
+    @patch('nvidia_rag.rag_server.vlm.get_prompts')
+    @patch('nvidia_rag.rag_server.vlm.get_minio_operator')
+    def test_analyze_images_from_context_invalid_base64(self, mock_get_minio, mock_get_prompts, mock_get_config):
+        """Test analyze_images_from_context handles invalid base64 content gracefully"""
+        mock_get_config.return_value = Mock()
+        mock_get_config.return_value.vlm = Mock()
+        mock_get_config.return_value.vlm.max_total_images = 4
+        mock_get_config.return_value.vlm.max_query_images = 2
+        mock_get_config.return_value.vlm.max_context_images = 2
+        mock_get_prompts.return_value = {
+            "vlm_template": "Test template: {question}",
+            "vlm_response_reasoning_template": {"system": "test", "human": "test"}
+        }
+
+        # Mock MinIO operator with invalid base64 content
+        mock_minio = Mock()
+        mock_minio.get_payload.return_value = {"content": "not_valid_base64!!!"}
+        mock_get_minio.return_value = mock_minio
+
+        # Mock document
+        mock_doc = Mock()
+        mock_doc.metadata = {
+            "content_metadata": {"type": "image", "page_number": 1, "location": [10, 20, 30, 40]},
+            "collection_name": "test_collection",
+            "source": {"source_id": "test.pdf"}
+        }
+
+        vlm = VLM(self.vlm_model, self.vlm_endpoint)
+
+        with patch('nvidia_rag.rag_server.vlm.get_unique_thumbnail_id_from_result') as mock_get_thumbnail_id:
+            mock_get_thumbnail_id.return_value = "test_thumbnail_id"
+            # Should return empty string when base64 decode fails
+            result = vlm.analyze_images_from_context([mock_doc], "test question")
+            assert result == ""
+
+    @patch('nvidia_rag.utils.common.get_config')
+    @patch('nvidia_rag.rag_server.vlm.get_prompts')
+    @patch('nvidia_rag.rag_server.vlm.get_minio_operator')
+    def test_analyze_images_from_context_unidentified_image(self, mock_get_minio, mock_get_prompts, mock_get_config):
+        """Test analyze_images_from_context handles UnidentifiedImageError gracefully"""
+        mock_get_config.return_value = Mock()
+        mock_get_config.return_value.vlm = Mock()
+        mock_get_config.return_value.vlm.max_total_images = 4
+        mock_get_config.return_value.vlm.max_query_images = 2
+        mock_get_config.return_value.vlm.max_context_images = 2
+        mock_get_prompts.return_value = {
+            "vlm_template": "Test template: {question}",
+            "vlm_response_reasoning_template": {"system": "test", "human": "test"}
+        }
+
+        # Mock MinIO operator with non-image content (valid base64 but not a valid image)
+        mock_minio = Mock()
+        # Base64 of "not an image"
+        mock_minio.get_payload.return_value = {"content": "bm90IGFuIGltYWdl"}
+        mock_get_minio.return_value = mock_minio
+
+        # Mock document
+        mock_doc = Mock()
+        mock_doc.metadata = {
+            "content_metadata": {"type": "image", "page_number": 1, "location": [10, 20, 30, 40]},
+            "collection_name": "test_collection",
+            "source": {"source_id": "test.pdf"}
+        }
+
+        vlm = VLM(self.vlm_model, self.vlm_endpoint)
+
+        with patch('nvidia_rag.rag_server.vlm.get_unique_thumbnail_id_from_result') as mock_get_thumbnail_id:
+            mock_get_thumbnail_id.return_value = "test_thumbnail_id"
+            # Should return empty string when PIL cannot identify the image
+            result = vlm.analyze_images_from_context([mock_doc], "test question")
+            assert result == ""
+
+    @patch('nvidia_rag.utils.common.get_config')
+    @patch('nvidia_rag.rag_server.vlm.get_prompts')
+    @patch('nvidia_rag.rag_server.vlm.get_minio_operator')
+    def test_analyze_images_from_context_empty_content(self, mock_get_minio, mock_get_prompts, mock_get_config):
+        """Test analyze_images_from_context handles empty content gracefully"""
+        mock_get_config.return_value = Mock()
+        mock_get_config.return_value.vlm = Mock()
+        mock_get_config.return_value.vlm.max_total_images = 4
+        mock_get_config.return_value.vlm.max_query_images = 2
+        mock_get_config.return_value.vlm.max_context_images = 2
+        mock_get_prompts.return_value = {
+            "vlm_template": "Test template: {question}",
+            "vlm_response_reasoning_template": {"system": "test", "human": "test"}
+        }
+
+        # Mock MinIO operator with empty content
+        mock_minio = Mock()
+        mock_minio.get_payload.return_value = {"content": ""}
+        mock_get_minio.return_value = mock_minio
+
+        # Mock document
+        mock_doc = Mock()
+        mock_doc.metadata = {
+            "content_metadata": {"type": "image", "page_number": 1, "location": [10, 20, 30, 40]},
+            "collection_name": "test_collection",
+            "source": {"source_id": "test.pdf"}
+        }
+
+        vlm = VLM(self.vlm_model, self.vlm_endpoint)
+
+        with patch('nvidia_rag.rag_server.vlm.get_unique_thumbnail_id_from_result') as mock_get_thumbnail_id:
+            mock_get_thumbnail_id.return_value = "test_thumbnail_id"
+            # Should return empty string when content is empty
+            result = vlm.analyze_images_from_context([mock_doc], "test question")
+            assert result == ""
+
+    @patch('nvidia_rag.utils.common.get_config')
+    @patch('nvidia_rag.rag_server.vlm.get_prompts')
+    @patch('nvidia_rag.rag_server.vlm.get_minio_operator')
+    def test_analyze_images_from_context_no_thumbnail_id(self, mock_get_minio, mock_get_prompts, mock_get_config):
+        """Test analyze_images_from_context when thumbnail ID cannot be generated"""
+        mock_get_config.return_value = Mock()
+        mock_get_config.return_value.vlm = Mock()
+        mock_get_config.return_value.vlm.max_total_images = 4
+        mock_get_config.return_value.vlm.max_query_images = 2
+        mock_get_config.return_value.vlm.max_context_images = 2
+        mock_get_prompts.return_value = {
+            "vlm_template": "Test template: {question}",
+            "vlm_response_reasoning_template": {"system": "test", "human": "test"}
+        }
+
+        # Mock MinIO operator (should not be called)
+        mock_minio = Mock()
+        mock_get_minio.return_value = mock_minio
+
+        # Mock document with incomplete metadata
+        mock_doc = Mock()
+        mock_doc.metadata = {
+            "content_metadata": {"type": "image", "page_number": 1},  # Missing location
+            "collection_name": "test_collection",
+            "source": {"source_id": "test.pdf"}
+        }
+
+        vlm = VLM(self.vlm_model, self.vlm_endpoint)
+
+        with patch('nvidia_rag.rag_server.vlm.get_unique_thumbnail_id_from_result') as mock_get_thumbnail_id:
+            # Simulate function returning None when location cannot be extracted
+            mock_get_thumbnail_id.return_value = None
+            # Should return empty string when thumbnail ID cannot be generated
+            result = vlm.analyze_images_from_context([mock_doc], "test question")
+            assert result == ""

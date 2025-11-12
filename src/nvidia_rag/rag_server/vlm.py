@@ -29,6 +29,7 @@ Class:
 """
 
 import base64
+import binascii
 import io
 import os
 import re
@@ -41,13 +42,16 @@ from langchain_core.prompts import ChatPromptTemplate
 from langchain_openai import ChatOpenAI
 from PIL import Image as PILImage
 from PIL import UnidentifiedImageError
-import binascii
 
-from nvidia_rag.utils.common import get_config
+from nvidia_rag.utils.common import ConfigProxy
 from nvidia_rag.utils.llm import get_llm, get_prompts
-from nvidia_rag.utils.minio_operator import get_minio_operator, get_unique_thumbnail_id
+from nvidia_rag.utils.minio_operator import (
+    get_minio_operator,
+    get_unique_thumbnail_id_from_result,
+)
 
 logger = getLogger(__name__)
+CONFIG = ConfigProxy()
 
 
 class VLM:
@@ -124,10 +128,9 @@ class VLM:
         formatted_prompt = self.vlm_template.format(question=question)
         message = HumanMessage(content=[{"type": "text", "text": formatted_prompt}])
 
-        config = get_config()
-        max_total_images = max(0, int(config.vlm.max_total_images))
-        max_query_images = max(0, int(config.vlm.max_query_images))
-        max_context_images = max(0, int(config.vlm.max_context_images))
+        max_total_images = max(0, int(CONFIG.vlm.max_total_images))
+        max_query_images = max(0, int(CONFIG.vlm.max_query_images))
+        max_context_images = max(0, int(CONFIG.vlm.max_context_images))
 
         logger.info(
             "VLM image limits - max_total_images=%d, max_query_images=%d, max_context_images=%d",
@@ -272,18 +275,25 @@ class VLM:
                 content_metadata = doc.metadata.get("content_metadata", {})
                 doc_type = content_metadata.get("type")
                 if doc_type in ["image", "structured"]:
+                    # Extract required fields
                     file_name = os.path.basename(
                         doc.metadata.get("source", {}).get("source_id", "")
                     )
                     page_number = content_metadata.get("page_number")
                     location = content_metadata.get("location")
 
-                    unique_thumbnail_id = get_unique_thumbnail_id(
+                    # Use centralized function with extracted fields and fallback
+                    unique_thumbnail_id = get_unique_thumbnail_id_from_result(
                         collection_name=doc.metadata.get("collection_name"),
                         file_name=file_name,
                         page_number=page_number,
                         location=location,
+                        metadata=doc.metadata,
                     )
+
+                    if unique_thumbnail_id is None:
+                        # Warning already logged in get_unique_thumbnail_id_from_result
+                        continue
 
                     payload = get_minio_operator().get_payload(
                         object_name=unique_thumbnail_id
@@ -308,7 +318,8 @@ class VLM:
                         img = PILImage.open(io.BytesIO(image_bytes)).convert("RGB")
                     except UnidentifiedImageError:
                         logger.warning(
-                            "Unidentified image content for %s; skipping", unique_thumbnail_id
+                            "Unidentified image content for %s; skipping",
+                            unique_thumbnail_id,
                         )
                         continue
                     image_objects.append(img)

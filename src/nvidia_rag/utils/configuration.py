@@ -84,6 +84,41 @@ class VectorStoreConfig(ConfigWizard):
         help_txt="Parameter controlling query time/accuracy trade-off. Higher ef leads to more accurate but slower search.",
     )
 
+    # Authentication for vector store (Authentication is currently supported for Milvus only)
+    username: str = configfield(
+        "username",
+        env_name="APP_VECTORSTORE_USERNAME",
+        default="",
+        help_txt="Username for vector store",
+    )
+
+    password: str = configfield(
+        "password",
+        env_name="APP_VECTORSTORE_PASSWORD",
+        default="",
+        help_txt="Password for vector store",
+    )
+
+    # API key authentication for vector store (used by Elasticsearch)
+    api_key: str = configfield(
+        "api_key",
+        env_name="APP_VECTORSTORE_APIKEY",
+        default="",
+        help_txt="API key for vector store authentication (base64 form 'id:secret')",
+    )
+    api_key_id: str = configfield(
+        "api_key_id",
+        env_name="APP_VECTORSTORE_APIKEY_ID",
+        default="",
+        help_txt="API key ID for vector store authentication",
+    )
+    api_key_secret: str = configfield(
+        "api_key_secret",
+        env_name="APP_VECTORSTORE_APIKEY_SECRET",
+        default="",
+        help_txt="API key secret for vector store authentication",
+    )
+
 
 @configclass
 class NvIngestConfig(ConfigWizard):
@@ -233,6 +268,20 @@ class ModelParametersConfig(ConfigWizard):
         help_txt="The maximum number of tokens to generate in any given call.",
     )
 
+    min_tokens: int = configfield(
+        "min_tokens",
+        env_name="LLM_MIN_TOKENS",
+        default=0,
+        help_txt="The minimum number of tokens to generate in any given call.",
+    )
+
+    ignore_eos: bool = configfield(
+        "ignore_eos",
+        env_name="LLM_IGNORE_EOS",
+        default=False,
+        help_txt="Whether to ignore the EOS token and continue generating tokens after the EOS token is generated",
+    )
+
     temperature: float = configfield(
         "temperature",
         env_name="LLM_TEMPERATURE",
@@ -275,7 +324,7 @@ class LLMConfig(ConfigWizard):
     parameters: ModelParametersConfig = configfield(
         "parameters",
         help_txt="Model-specific parameters for generation.",
-        default=ModelParametersConfig(),
+        default_factory=ModelParametersConfig,
     )
 
     def get_model_parameters(self) -> dict:
@@ -285,6 +334,8 @@ class LLMConfig(ConfigWizard):
         adjusted according to the model name.
         """
         params = {
+            "min_tokens": self.parameters.min_tokens,
+            "ignore_eos": self.parameters.ignore_eos,
             "max_tokens": self.parameters.max_tokens,
             "temperature": self.parameters.temperature,
             "top_p": self.parameters.top_p,
@@ -602,6 +653,18 @@ class SummarizerConfig(ConfigWizard):
         default=200,
         help_txt="Overlap between chunks for iterative summarization (in characters)",
     )
+    temperature: float = configfield(
+        "temperature",
+        env_name="SUMMARY_LLM_TEMPERATURE",
+        default=0.0,
+        help_txt="Temperature for the summarizer model (controls randomness)",
+    )
+    top_p: float = configfield(
+        "top_p",
+        env_name="SUMMARY_LLM_TOP_P",
+        default=1.0,
+        help_txt="Top-p sampling for the summarizer model (nucleus sampling)",
+    )
 
 
 @configclass
@@ -667,58 +730,58 @@ class AppConfig(ConfigWizard):
         "vector_store",
         env=False,
         help_txt="The configuration of the vector db connection.",
-        default=VectorStoreConfig(),
+        default_factory=VectorStoreConfig,
     )
     llm: LLMConfig = configfield(
         "llm",
         env=False,
         help_txt="The configuration for the server hosting the Large Language Models.",
-        default=LLMConfig(),
+        default_factory=LLMConfig,
     )
     query_rewriter: QueryRewriterConfig = configfield(
         "query_rewriter",
         env=False,
         help_txt="The configuration for the query rewriter.",
-        default=QueryRewriterConfig(),
+        default_factory=QueryRewriterConfig,
     )
     filter_expression_generator: FilterExpressionGeneratorConfig = configfield(
         "filter_expression_generator",
         env=False,
         help_txt="The configuration for the filter expression generator.",
-        default=FilterExpressionGeneratorConfig(),
+        default_factory=FilterExpressionGeneratorConfig,
     )
     text_splitter: TextSplitterConfig = configfield(
         "text_splitter",
         env=False,
         help_txt="The configuration for text splitter.",
-        default=TextSplitterConfig(),
+        default_factory=TextSplitterConfig,
     )
     embeddings: EmbeddingConfig = configfield(
         "embeddings",
         env=False,
         help_txt="The configuration of embedding model.",
-        default=EmbeddingConfig(),
+        default_factory=EmbeddingConfig,
     )
     ranking: RankingConfig = configfield(
         "ranking",
         env=False,
         help_txt="The configuration of ranking model.",
-        default=RankingConfig(),
+        default_factory=RankingConfig,
     )
     retriever: RetrieverConfig = configfield(
         "retriever",
         env=False,
         help_txt="The configuration of the retriever pipeline.",
-        default=RetrieverConfig(),
+        default_factory=RetrieverConfig,
     )
     nv_ingest: NvIngestConfig = configfield(
         "nv_ingest",
         env=False,
         help_txt="The configuration for nv-ingest.",
-        default=NvIngestConfig(),
+        default_factory=NvIngestConfig,
     )
     tracing: TracingConfig = configfield(
-        "tracing", env=False, help_txt="", default=TracingConfig()
+        "tracing", env=False, help_txt="", default_factory=TracingConfig
     )
     enable_guardrails: bool = configfield(
         "enable_guardrails",
@@ -748,13 +811,13 @@ class AppConfig(ConfigWizard):
         "vlm",
         env=False,
         help_txt="The configuration for the VLM.",
-        default=VLMConfig(),
+        default_factory=VLMConfig,
     )
     minio: MinioConfig = configfield(
         "minio",
         env=False,
         help_txt="The configuration of the minio server.",
-        default=MinioConfig(),
+        default_factory=MinioConfig,
     )
     temp_dir: str = configfield(
         "temp_dir",
@@ -766,18 +829,18 @@ class AppConfig(ConfigWizard):
         "summarizer",
         env=False,
         help_txt="The configuration for the summarizer.",
-        default=SummarizerConfig(),
+        default_factory=SummarizerConfig,
     )
 
     metadata: MetadataConfig = configfield(
         "metadata",
         env=False,
         help_txt="The configuration for metadata handling.",
-        default=MetadataConfig(),
+        default_factory=MetadataConfig,
     )
     query_decomposition: QueryDecompositionConfig = configfield(
         "query_decomposition",
         env=False,
         help_txt="The configuration for query decomposition.",
-        default=QueryDecompositionConfig(),
+        default_factory=QueryDecompositionConfig,
     )

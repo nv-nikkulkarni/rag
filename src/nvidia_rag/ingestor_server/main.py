@@ -53,14 +53,16 @@ from nv_ingest_client.primitives.tasks.extract import _DEFAULT_EXTRACTOR_MAP
 from nv_ingest_client.util.file_processing.extract import EXTENSION_TO_DOCUMENT_TYPE
 from nv_ingest_client.util.vdb.adt_vdb import VDB
 
+from nvidia_rag.ingestor_server.ingestion_state_manager import IngestionStateManager
 from nvidia_rag.ingestor_server.nvingest import (
     get_nv_ingest_client,
     get_nv_ingest_ingestor,
 )
 from nvidia_rag.ingestor_server.task_handler import INGESTION_TASK_HANDLER
-from nvidia_rag.utils.common import get_config
+from nvidia_rag.utils.common import ConfigProxy
 from nvidia_rag.utils.llm import get_llm, get_prompts
 from nvidia_rag.utils.metadata_validation import (
+    SYSTEM_MANAGED_FIELDS,
     MetadataField,
     MetadataSchema,
     MetadataValidator,
@@ -70,6 +72,7 @@ from nvidia_rag.utils.minio_operator import (
     get_unique_thumbnail_id,
     get_unique_thumbnail_id_collection_prefix,
     get_unique_thumbnail_id_file_name_prefix,
+    get_unique_thumbnail_id_from_result,
 )
 from nvidia_rag.utils.vdb import _get_vdb_op
 from nvidia_rag.utils.vdb.vdb_base import VDBRag
@@ -77,7 +80,7 @@ from nvidia_rag.utils.vdb.vdb_base import VDBRag
 # Initialize global objects
 logger = logging.getLogger(__name__)
 
-CONFIG = get_config()
+CONFIG = ConfigProxy()
 NV_INGEST_CLIENT_INSTANCE = get_nv_ingest_client()
 
 MINIO_OPERATOR = None
@@ -119,7 +122,6 @@ class NvidiaRAGIngestor:
     Main Class for RAG ingestion pipeline integration for NV-Ingest
     """
 
-    _config = get_config()
     _vdb_upload_bulk_size = 500
 
     def __init__(
@@ -174,11 +176,12 @@ class NvidiaRAGIngestor:
 
     def __prepare_vdb_op_and_collection_name(
         self,
-        vdb_endpoint: str = None,
-        collection_name: str = None,
-        custom_metadata: list[dict[str, Any]] = None,
-        filepaths: list[str] = None,
+        vdb_endpoint: str | None = None,
+        collection_name: str | None = None,
+        custom_metadata: list[dict[str, Any]] | None = None,
+        filepaths: list[str] | None = None,
         bypass_validation: bool = False,
+        metadata_schema: list[dict[str, Any]] | None = None,
     ) -> VDBRag:
         """
         Prepare the VDBRag object for ingestion.
@@ -195,6 +198,7 @@ class NvidiaRAGIngestor:
                 collection_name=collection_name,
                 custom_metadata=custom_metadata,
                 all_file_paths=filepaths,
+                metadata_schema=metadata_schema,
             )
             return vdb_op, collection_name
 
@@ -215,6 +219,7 @@ class NvidiaRAGIngestor:
         split_options: dict[str, Any] = None,
         custom_metadata: list[dict[str, Any]] = None,
         generate_summary: bool = False,
+        additional_validation_errors: list[dict[str, Any]] | None = None,
     ) -> dict[str, Any]:
         """Upload documents to the vector store.
 
@@ -222,9 +227,17 @@ class NvidiaRAGIngestor:
             filepaths (List[str]): List of absolute filepaths to upload
             blocking (bool, optional): Whether to block until ingestion completes. Defaults to False.
             collection_name (str, optional): Name of collection in vector database. Defaults to "multimodal_data".
-            split_options (Dict[str, Any], optional): Options for splitting documents. Defaults to chunk_size and chunk_overlap from settings.
+            split_options (Dict[str, Any], optional): Options for splitting documents. Defaults to chunk_size and chunk_overlap from CONFIG.
             custom_metadata (List[Dict[str, Any]], optional): Custom metadata to add to documents. Defaults to empty list.
+            additional_validation_errors (List[Dict[str, Any]] | None, optional): Additional validation errors to include in response. Defaults to None.
         """
+
+        state_manager = IngestionStateManager(
+            filepaths=filepaths,
+            collection_name=collection_name,
+            custom_metadata=custom_metadata,
+        )
+        task_id = state_manager.get_task_id()
 
         vdb_op, collection_name = self.__prepare_vdb_op_and_collection_name(
             vdb_endpoint=vdb_endpoint,
@@ -240,6 +253,8 @@ class NvidiaRAGIngestor:
             }
         if custom_metadata is None:
             custom_metadata = []
+        if additional_validation_errors is None:
+            additional_validation_errors = []
 
         if not vdb_op.check_collection_exists(collection_name):
             raise ValueError(
@@ -248,6 +263,7 @@ class NvidiaRAGIngestor:
 
         try:
             if not blocking:
+                state_manager.is_background = True
 
                 def _task():
                     return self.__ingest_docs(
@@ -258,9 +274,13 @@ class NvidiaRAGIngestor:
                         split_options=split_options,
                         custom_metadata=custom_metadata,
                         generate_summary=generate_summary,
+                        additional_validation_errors=additional_validation_errors,
+                        state_manager=state_manager,
                     )
 
-                task_id = INGESTION_TASK_HANDLER.submit_task(_task)
+                task_id = await INGESTION_TASK_HANDLER.submit_task(
+                    _task, task_id=task_id
+                )
                 return {
                     "message": "Ingestion started in background",
                     "task_id": task_id,
@@ -274,6 +294,8 @@ class NvidiaRAGIngestor:
                     split_options=split_options,
                     custom_metadata=custom_metadata,
                     generate_summary=generate_summary,
+                    additional_validation_errors=additional_validation_errors,
+                    state_manager=state_manager,
                 )
             return response_dict
 
@@ -295,6 +317,8 @@ class NvidiaRAGIngestor:
         split_options: dict[str, Any] = None,
         custom_metadata: list[dict[str, Any]] = None,
         generate_summary: bool = False,
+        additional_validation_errors: list[dict[str, Any]] | None = None,
+        state_manager: IngestionStateManager = None,
     ) -> dict[str, Any]:
         """
         Main function called by ingestor server to ingest
@@ -305,19 +329,35 @@ class NvidiaRAGIngestor:
             - collection_name: str - Name of the collection in the vector database
             - split_options: Dict[str, Any] - Options for splitting documents
             - custom_metadata: List[Dict[str, Any]] - Custom metadata to be added to documents
+            - additional_validation_errors: List[Dict[str, Any]] | None - Additional validation errors to include in response (defaults to None)
         """
         logger.info("Performing ingestion in collection_name: %s", collection_name)
         logger.debug("Filepaths for ingestion: %s", filepaths)
 
         failed_validation_documents = []
-        validation_errors = []
+        validation_errors = (
+            []
+            if additional_validation_errors is None
+            else list(additional_validation_errors)
+        )
         original_file_count = len(filepaths)
 
+        state_manager.validation_errors = validation_errors
+        state_manager.failed_validation_documents = failed_validation_documents
+
         try:
+            # Get metadata schema once for validation and CSV preparation
+            metadata_schema = vdb_op.get_metadata_schema(collection_name)
+
             # Always run validation if there's a schema, even without custom_metadata
-            validation_status, validation_errors = await self._validate_custom_metadata(
-                custom_metadata, collection_name, vdb_op, filepaths
+            (
+                validation_status,
+                metadata_validation_errors,
+            ) = await self._validate_custom_metadata(
+                custom_metadata, collection_name, metadata_schema, filepaths
             )
+            # Merge metadata validation errors with additional validation errors
+            validation_errors.extend(metadata_validation_errors)
 
             # Re-initialize vdb_op if custom_metadata is provided
             # This is needed since custom_metadata is normalized in the _validate_custom_metadata method
@@ -327,6 +367,7 @@ class NvidiaRAGIngestor:
                     collection_name=collection_name,
                     custom_metadata=custom_metadata,
                     filepaths=filepaths,
+                    metadata_schema=metadata_schema,
                 )
 
             if not validation_status:
@@ -459,6 +500,7 @@ class NvidiaRAGIngestor:
                 vdb_op=vdb_op,
                 split_options=split_options,
                 generate_summary=generate_summary,
+                state_manager=state_manager,
             )
 
             logger.info(
@@ -466,50 +508,20 @@ class NvidiaRAGIngestor:
                 time.time() - start_time,
             )
 
-            # Get failed documents
-            failed_documents = await self.__get_failed_documents(
-                failures, filepaths, collection_name
+            response_data = await self.__build_ingestion_response(
+                failures=failures,
+                filepaths=filepaths,
+                state_manager=state_manager,
+                is_final_batch=True,
             )
-            failures_filepaths = [
-                failed_document.get("document_name")
-                for failed_document in failed_documents
-            ]
-
-            filename_to_metadata_map = {
-                custom_metadata_item.get("filename"): custom_metadata_item.get(
-                    "metadata"
-                )
-                for custom_metadata_item in custom_metadata
-            }
-            # Generate response dictionary
-            uploaded_documents = [
-                {
-                    # Generate a document_id from filename
-                    "document_id": str(uuid4()),
-                    "document_name": os.path.basename(filepath),
-                    "size_bytes": os.path.getsize(filepath),
-                    "metadata": {
-                        **filename_to_metadata_map.get(os.path.basename(filepath), {}),
-                        "filename": filename_to_metadata_map.get(
-                            os.path.basename(filepath), {}
-                        ).get("filename")
-                        or os.path.basename(filepath),
-                    },
-                }
-                for filepath in filepaths
-                if os.path.basename(filepath) not in failures_filepaths
-            ]
-
-            # Get current timestamp in ISO format
-            # TODO: Store document_id, timestamp and document size as metadata
-
-            response_data = {
-                "message": "Document upload job successfully completed.",
-                "total_documents": original_file_count,
-                "documents": uploaded_documents,
-                "failed_documents": failed_documents + failed_validation_documents,
-                "validation_errors": validation_errors,
-            }
+            ingestion_state = await state_manager.update_total_progress(
+                total_progress_response=response_data,
+            )
+            await INGESTION_TASK_HANDLER.set_task_status_and_result(
+                task_id=state_manager.get_task_id(),
+                status="FINISHED",
+                result=ingestion_state,
+            )
 
             # Optional: Clean up provided files after ingestion, needed for
             # docker workflow
@@ -524,7 +536,7 @@ class NvidiaRAGIngestor:
                     except Exception as e:
                         logger.error(f"Error deleting {file}: {e}")
 
-            return response_data
+            return ingestion_state
 
         except Exception as e:
             logger.exception(
@@ -533,6 +545,72 @@ class NvidiaRAGIngestor:
                 exc_info=logger.getEffectiveLevel() <= logging.DEBUG,
             )
             raise e
+
+    async def __build_ingestion_response(
+        self,
+        failures: list[dict[str, Any]],
+        filepaths: list[str] | None = None,
+        is_final_batch: bool = True,
+        state_manager: IngestionStateManager = None,
+    ) -> dict[str, Any]:
+        """
+        Builds the ingestion response dictionary.
+
+        Args:
+            results: List[list[dict[str, str | dict]]] - List of results from the ingestion process
+            failures: List[dict[str, Any]] - List of failures from the ingestion process
+            is_final_batch: bool - Whether the batch is the final batch
+            state_manager: IngestionStateManager - State manager for the ingestion process
+        """
+        # Get failed documents
+        failed_documents = await self.__get_failed_documents(
+            failures=failures,
+            filepaths=filepaths,
+            collection_name=state_manager.collection_name,
+            is_final_batch=is_final_batch,
+        )
+        failures_filepaths = [
+            failed_document.get("document_name") for failed_document in failed_documents
+        ]
+
+        filename_to_metadata_map = {
+            custom_metadata_item.get("filename"): custom_metadata_item.get("metadata")
+            for custom_metadata_item in (state_manager.custom_metadata or [])
+        }
+        # Generate response dictionary
+        uploaded_documents = [
+            {
+                # Generate a document_id from filename
+                "document_id": str(uuid4()),
+                "document_name": os.path.basename(filepath),
+                "size_bytes": os.path.getsize(filepath),
+                "metadata": {
+                    **filename_to_metadata_map.get(os.path.basename(filepath), {}),
+                    "filename": filename_to_metadata_map.get(
+                        os.path.basename(filepath), {}
+                    ).get("filename")
+                    or os.path.basename(filepath),
+                },
+            }
+            for filepath in filepaths
+            if os.path.basename(filepath) not in failures_filepaths
+        ]
+
+        # Get current timestamp in ISO format
+        # TODO: Store document_id, timestamp and document size as metadata
+        if is_final_batch:
+            message = "Document upload job successfully completed."
+        else:
+            message = "Document upload job is in progress."
+        response_data = {
+            "message": message,
+            "total_documents": len(state_manager.filepaths),
+            "documents": uploaded_documents,
+            "failed_documents": failed_documents
+            + state_manager.failed_validation_documents,
+            "validation_errors": state_manager.validation_errors,
+        }
+        return response_data
 
     async def __ingest_document_summary(
         self, results: list[list[dict[str, str | dict]]], collection_name: str
@@ -566,6 +644,7 @@ class NvidiaRAGIngestor:
         split_options: dict[str, Any] = None,
         custom_metadata: list[dict[str, Any]] = None,
         generate_summary: bool = False,
+        additional_validation_errors: list[dict[str, Any]] | None = None,
     ) -> dict[str, Any]:
         """Upload a document to the vector store. If the document already exists, it will be replaced."""
 
@@ -614,6 +693,7 @@ class NvidiaRAGIngestor:
             split_options=split_options,
             custom_metadata=custom_metadata,
             generate_summary=generate_summary,
+            additional_validation_errors=additional_validation_errors,
         )
         return response
 
@@ -623,12 +703,15 @@ class NvidiaRAGIngestor:
 
         logger.info(f"Getting status of task {task_id}")
         try:
-            if INGESTION_TASK_HANDLER.get_task_status(task_id) == "PENDING":
+            status_and_result = INGESTION_TASK_HANDLER.get_task_status_and_result(
+                task_id
+            )
+            if status_and_result.get("state") == "PENDING":
                 logger.info(f"Task {task_id} is pending")
-                return {"state": "PENDING", "result": {"message": "Task is pending"}}
-            elif INGESTION_TASK_HANDLER.get_task_status(task_id) == "FINISHED":
+                return {"state": "PENDING", "result": status_and_result.get("result")}
+            elif status_and_result.get("state") == "FINISHED":
                 try:
-                    result = INGESTION_TASK_HANDLER.get_task_result(task_id)
+                    result = status_and_result.get("result")
                     if isinstance(result, dict) and result.get("state") == "FAILED":
                         logger.error(
                             f"Task {task_id} failed with error: {result.get('message')}"
@@ -640,10 +723,15 @@ class NvidiaRAGIngestor:
                 except Exception as e:
                     logger.error(f"Task {task_id} failed with error: {e}")
                     return {"state": "FAILED", "result": {"message": str(e)}}
+            elif status_and_result.get("state") == "FAILED":
+                logger.error(
+                    f"Task {task_id} failed with error: {status_and_result.get('result').get('message')}"
+                )
+                return {"state": "FAILED", "result": status_and_result.get("result")}
             else:
                 logger.error(
                     f"Unknown task state: {
-                        INGESTION_TASK_HANDLER.get_task_status(task_id)
+                        INGESTION_TASK_HANDLER.get_task_state(task_id)
                     }"
                 )
                 return {"state": "UNKNOWN", "result": {"message": "Unknown task state"}}
@@ -669,16 +757,25 @@ class NvidiaRAGIngestor:
         if metadata_schema is None:
             metadata_schema = []
 
-        filename_field = {
-            "name": "filename",
-            "type": "string",
-            "description": "Name of the uploaded file",
-            "required": False,
-        }
-
         existing_field_names = {field.get("name") for field in metadata_schema}
-        if "filename" not in existing_field_names:
-            metadata_schema.append(filename_field)
+
+        # Add system-managed fields (RAG-managed and nv-ingest auto-extracted)
+        for field_name, field_def in SYSTEM_MANAGED_FIELDS.items():
+            if field_name not in existing_field_names:
+                metadata_schema.append(
+                    {
+                        "name": field_name,
+                        "type": field_def["type"],
+                        "description": field_def["description"],
+                        "required": False,  # System fields are never required
+                        "user_defined": field_def[
+                            "rag_managed"
+                        ],  # rag_managed=True means user_defined=True
+                        "support_dynamic_filtering": field_def[
+                            "support_dynamic_filtering"
+                        ],
+                    }
+                )
 
         try:
             # Create the metadata schema collection
@@ -862,6 +959,20 @@ class NvidiaRAGIngestor:
             # Fetch collections from vector store
             collection_info = vdb_op.get_collection()
 
+            # Filter metadata schemas to only show user-defined fields in UI
+            # Also remove internal implementation keys that users don't need to see
+            for collection in collection_info:
+                if "metadata_schema" in collection:
+                    collection["metadata_schema"] = [
+                        {
+                            k: v
+                            for k, v in field.items()
+                            if k not in ("user_defined", "support_dynamic_filtering")
+                        }
+                        for field in collection["metadata_schema"]
+                        if field.get("user_defined", True)
+                    ]
+
             return {
                 "message": "Collections listed successfully.",
                 "collections": collection_info,
@@ -897,6 +1008,14 @@ class NvidiaRAGIngestor:
             )
             documents_list = vdb_op.get_documents(collection_name)
 
+            # Get metadata schema to filter out chunk-level auto-extracted fields
+            metadata_schema = vdb_op.get_metadata_schema(collection_name)
+            user_defined_fields = {
+                field["name"]
+                for field in metadata_schema
+                if field.get("user_defined", True)
+            }
+
             # Generate response format
             documents = [
                 {
@@ -906,7 +1025,11 @@ class NvidiaRAGIngestor:
                     ),  # Extract file name
                     "timestamp": "",  # TODO - Use actual timestamp
                     "size_bytes": 0,  # TODO - Use actual size
-                    "metadata": doc_item.get("metadata", {}),
+                    "metadata": {
+                        k: v
+                        for k, v in doc_item.get("metadata", {}).items()
+                        if k in user_defined_fields
+                    },
                 }
                 for doc_item in documents_list
             ]
@@ -943,7 +1066,6 @@ class NvidiaRAGIngestor:
         Returns:
             Dict[str, Any]: Response containing a list of deleted documents with metadata.
         """
-        settings = get_config()
 
         try:
             vdb_op, collection_name = self.__prepare_vdb_op_and_collection_name(
@@ -960,7 +1082,7 @@ class NvidiaRAGIngestor:
                 upload_folder = str(
                     Path(
                         os.path.join(
-                            settings.temp_dir, f"uploaded_files/{collection_name}"
+                            CONFIG.temp_dir, f"uploaded_files/{collection_name}"
                         )
                     )
                 )
@@ -1040,8 +1162,10 @@ class NvidiaRAGIngestor:
         for result in results:
             for result_element in result:
                 if result_element.get("document_type") in ["image", "structured"]:
-                    # Pull content from result_element
+                    # Extract required fields
+                    metadata = result_element.get("metadata", {})
                     content = result_element.get("metadata").get("content")
+
                     file_name = os.path.basename(
                         result_element.get("metadata")
                         .get("source_metadata")
@@ -1058,17 +1182,22 @@ class NvidiaRAGIngestor:
                         .get("location")
                     )
 
-                    if location is not None:
-                        # Get unique_thumbnail_id
-                        unique_thumbnail_id = get_unique_thumbnail_id(
-                            collection_name=collection_name,
-                            file_name=file_name,
-                            page_number=page_number,
-                            location=location,
-                        )
+                    # Get unique_thumbnail_id using the centralized function
+                    # Try with extracted location first, fallback to content_metadata if None
+                    unique_thumbnail_id = get_unique_thumbnail_id_from_result(
+                        collection_name=collection_name,
+                        file_name=file_name,
+                        page_number=page_number,
+                        location=location,
+                        metadata=metadata,
+                    )
 
+                    if unique_thumbnail_id is not None:
+                        # Pull content from result_element
                         payloads.append({"content": content})
                         object_names.append(unique_thumbnail_id)
+                    # If unique_thumbnail_id is None, the item is skipped
+                    # (warning already logged in get_unique_thumbnail_id_from_result)
 
         if os.getenv("ENABLE_MINIO_BULK_UPLOAD", "True") in ["True", "true"]:
             logger.info(f"Bulk uploading {len(payloads)} payloads to MinIO")
@@ -1089,6 +1218,7 @@ class NvidiaRAGIngestor:
         vdb_op: VDBRag = None,
         split_options: dict[str, Any] = None,
         generate_summary: bool = False,
+        state_manager: IngestionStateManager = None,
     ) -> tuple[list[list[dict[str, str | dict]]], list[dict[str, Any]]]:
         """
         Wrapper function to ingest documents in chunks using NV-ingest
@@ -1113,6 +1243,7 @@ class NvidiaRAGIngestor:
                 vdb_op=vdb_op,
                 split_options=split_options,
                 generate_summary=generate_summary,
+                state_manager=state_manager,
             )
             return results, failures
 
@@ -1145,6 +1276,7 @@ class NvidiaRAGIngestor:
                         batch_number=batch_num,
                         split_options=split_options,
                         generate_summary=generate_summary,
+                        state_manager=state_manager,
                     )
                     all_results.extend(results)
                     all_failures.extend(failures)
@@ -1189,6 +1321,7 @@ class NvidiaRAGIngestor:
                             batch_number=batch_num,
                             split_options=split_options,
                             generate_summary=generate_summary,
+                            state_manager=state_manager,
                         )
 
                 for i in range(0, len(filepaths), NV_INGEST_FILES_PER_BATCH):
@@ -1225,6 +1358,7 @@ class NvidiaRAGIngestor:
         batch_number: int = 0,
         split_options: dict[str, Any] = None,
         generate_summary: bool = False,
+        state_manager: IngestionStateManager = None,
     ) -> tuple[list[list[dict[str, str | dict]]], list[dict[str, Any]]]:
         """
         This methods performs following steps:
@@ -1247,34 +1381,18 @@ class NvidiaRAGIngestor:
             }
 
         filtered_filepaths = await self.__remove_unsupported_files(filepaths)
-        if CONFIG.nv_ingest.pdf_extract_method not in ["None", "none"]:
-            filtered_filepaths = await self.__remove_non_pdf_files(filtered_filepaths)
 
         if len(filtered_filepaths) == 0:
             logger.error("No files to ingest after filtering.")
             results, failures = [], []
             return results, failures
 
-        nv_ingest_ingestor = get_nv_ingest_ingestor(
-            nv_ingest_client_instance=NV_INGEST_CLIENT_INSTANCE,
-            filepaths=filtered_filepaths,
+        results, failures = await self._perform_file_ext_based_ingestion(
+            batch_number=batch_number,
+            filtered_filepaths=filtered_filepaths,
             split_options=split_options,
             vdb_op=vdb_op,
         )
-        start_time = time.time()
-        logger.info(
-            f"Performing ingestion for batch {batch_number} with parameters: {
-                split_options
-            }"
-        )
-        results, failures = await asyncio.to_thread(
-            lambda: nv_ingest_ingestor.ingest(
-                return_failures=True,
-                show_progress=logger.getEffectiveLevel() <= logging.DEBUG,
-            )
-        )
-        total_ingestion_time = time.time() - start_time
-        self._log_result_info(batch_number, results, failures, total_ingestion_time)
 
         if generate_summary:
             logger.info(
@@ -1305,6 +1423,20 @@ class NvidiaRAGIngestor:
                     end_time - start_time
                 } seconds =="
             )
+            batch_progress_response = await self.__build_ingestion_response(
+                failures=failures,
+                filepaths=filepaths,
+                state_manager=state_manager,
+                is_final_batch=False,
+            )
+            ingestion_state = await state_manager.update_batch_progress(
+                batch_progress_response=batch_progress_response,
+            )
+            await INGESTION_TASK_HANDLER.set_task_status_and_result(
+                task_id=state_manager.get_task_id(),
+                status="PENDING",
+                result=ingestion_state,
+            )
         except Exception as e:
             logger.error(
                 "Failed to put content to minio: %s, citations would be disabled for collection: %s",
@@ -1315,12 +1447,132 @@ class NvidiaRAGIngestor:
 
         return results, failures
 
+    async def _perform_file_ext_based_ingestion(
+        self,
+        batch_number: int,
+        filtered_filepaths: list[str],
+        split_options: dict[str, Any],
+        vdb_op: VDBRag,
+    ):
+        """
+        Perform ingestion using NV-Ingest ingestor based on file extension
+        - If pdf extract method is None, perform ingestion for all files
+        - If pdf extract method is not None, split the files into PDF and non-PDF files and perform ingestion for PDF files
+            - Perform ingestion for non-PDF files with remove_extract_method=True
+
+        Arguments:
+            - batch_number: int - Batch number for the ingestion process
+            - filtered_filepaths: list[str] - List of filtered filepaths
+            - split_options: dict[str, Any] - Options for splitting documents
+            - vdb_op: VDBRag - Vector database operation instance
+
+        Returns:
+            - tuple[list[list[dict[str, str | dict]]], list[dict[str, Any]]] - Results and failures
+        """
+        if CONFIG.nv_ingest.pdf_extract_method in ["None", "none"]:
+            nv_ingest_ingestor = get_nv_ingest_ingestor(
+                nv_ingest_client_instance=NV_INGEST_CLIENT_INSTANCE,
+                filepaths=filtered_filepaths,
+                split_options=split_options,
+                vdb_op=vdb_op,
+            )
+            start_time = time.time()
+            logger.info(
+                f"Performing ingestion for batch {batch_number} with parameters: {
+                    split_options
+                }"
+            )
+            results, failures = await asyncio.to_thread(
+                lambda: nv_ingest_ingestor.ingest(
+                    return_failures=True,
+                    show_progress=logger.getEffectiveLevel() <= logging.DEBUG,
+                )
+            )
+            total_ingestion_time = time.time() - start_time
+            self._log_result_info(batch_number, results, failures, total_ingestion_time)
+            return results, failures
+        else:
+            pdf_filepaths, non_pdf_filepaths = await self.__split_pdf_and_non_pdf_files(
+                filtered_filepaths
+            )
+            logger.info(
+                f"Split PDF and non-PDF files for batch {batch_number}: "
+                f"Count of PDF files: {len(pdf_filepaths)}, Count of non-PDF files: {len(non_pdf_filepaths)}"
+            )
+
+            results, failures = [], []
+            # Perform ingestion for PDF files
+            if len(pdf_filepaths) > 0:
+                nv_ingest_ingestor = get_nv_ingest_ingestor(
+                    nv_ingest_client_instance=NV_INGEST_CLIENT_INSTANCE,
+                    filepaths=pdf_filepaths,
+                    split_options=split_options,
+                    vdb_op=vdb_op,
+                )
+                start_time = time.time()
+                logger.info(
+                    f"Performing ingestion for PDF files for batch {
+                        batch_number
+                    } with parameters: {split_options}"
+                )
+                results_pdf, failures_pdf = await asyncio.to_thread(
+                    lambda: nv_ingest_ingestor.ingest(
+                        return_failures=True,
+                        show_progress=logger.getEffectiveLevel() <= logging.DEBUG,
+                    )
+                )
+                total_ingestion_time = time.time() - start_time
+                self._log_result_info(
+                    batch_number,
+                    results,
+                    failures,
+                    total_ingestion_time,
+                    additional_summary="PDF files ingestion completed",
+                )
+                results.extend(results_pdf)
+                failures.extend(failures_pdf)
+
+            # Perform ingestion for non-PDF files
+            if len(non_pdf_filepaths) > 0:
+                nv_ingest_ingestor = get_nv_ingest_ingestor(
+                    nv_ingest_client_instance=NV_INGEST_CLIENT_INSTANCE,
+                    filepaths=non_pdf_filepaths,
+                    split_options=split_options,
+                    vdb_op=vdb_op,
+                    remove_extract_method=True,
+                )
+                start_time = time.time()
+                logger.info(
+                    f"Performing ingestion for non-PDF files for batch {
+                        batch_number
+                    } with parameters: {split_options}"
+                )
+                results_non_pdf, failures_non_pdf = await asyncio.to_thread(
+                    lambda: nv_ingest_ingestor.ingest(
+                        return_failures=True,
+                        show_progress=logger.getEffectiveLevel() <= logging.DEBUG,
+                    )
+                )
+                total_ingestion_time = time.time() - start_time
+                self._log_result_info(
+                    batch_number,
+                    results_non_pdf,
+                    failures_non_pdf,
+                    total_ingestion_time,
+                    additional_summary="Non-PDF files ingestion completed",
+                )
+                results.extend(results_non_pdf)
+                failures.extend(failures_non_pdf)
+
+            return results, failures
+
     def _log_result_info(
         self,
         batch_number: int,
         results: list[list[dict[str, str | dict]]],
         failures: list[dict[str, Any]],
         total_ingestion_time: float,
+        additional_summary: str = "",
     ):
         """
         Log the results info with document type counts
@@ -1371,6 +1623,9 @@ class NvidiaRAGIngestor:
         if failures:
             summary += f", {len(failures)} files failed ingestion"
 
+        if additional_summary:
+            summary += f" • {additional_summary}"
+
         logger.info(
             f"== Batch {batch_number} Ingestion completed in {total_ingestion_time:.2f} seconds • Summary: {summary} =="
         )
@@ -1378,8 +1633,9 @@ class NvidiaRAGIngestor:
     async def __get_failed_documents(
         self,
         failures: list[dict[str, Any]],
-        filepaths: list[str],
-        collection_name: str,
+        filepaths: list[str] | None = None,
+        collection_name: str | None = None,
+        is_final_batch: bool = True,
     ) -> list[dict[str, Any]]:
         """
         Get failed documents
@@ -1401,6 +1657,11 @@ class NvidiaRAGIngestor:
                 {"document_name": failed_filename, "error_message": error_message}
             )
             failed_documents_filenames.add(failed_filename)
+        if not is_final_batch:
+            # For non-final batches, we don't need to add non-supported files
+            # and document to failed documents if it is not in the Milvus
+            # because we will continue to ingest the next batch
+            return failed_documents
 
         # Add non-supported files to failed documents
         for filepath in await self.__get_non_supported_files(filepaths):
@@ -1414,23 +1675,6 @@ class NvidiaRAGIngestor:
                     }
                 )
                 failed_documents_filenames.add(filename)
-
-        # Add non-pdf files to failed documents if pdf extract method is not None
-        if CONFIG.nv_ingest.pdf_extract_method not in ["None", "none"]:
-            for filepath in filepaths:
-                # Check if the file is a pdf
-                if os.path.splitext(filepath)[1].lower() != ".pdf":
-                    filename = os.path.basename(filepath)
-                    if filename not in failed_documents_filenames:
-                        failed_documents.append(
-                            {
-                                "document_name": filename,
-                                "error_message": "Non-PDF file type not supported for extraction with pdf extract method: "
-                                + CONFIG.nv_ingest.pdf_extract_method
-                                + "please set pdf extract method to None to ingest this file",
-                            }
-                        )
-                        failed_documents_filenames.add(filename)
 
         # Add document to failed documents if it is not in the Milvus
         filenames_in_vdb = set()
@@ -1470,13 +1714,18 @@ class NvidiaRAGIngestor:
             filepath for filepath in filepaths if filepath not in non_supported_files
         ]
 
-    async def __remove_non_pdf_files(self, filepaths: list[str]) -> list[str]:
-        """Remove non-PDF files from the list of filepaths."""
-        return [
-            filepath
-            for filepath in filepaths
-            if os.path.splitext(filepath)[1].lower() == ".pdf"
-        ]
+    async def __split_pdf_and_non_pdf_files(
+        self, filepaths: list[str]
+    ) -> tuple[list[str], list[str]]:
+        """Split PDF and non-PDF files from the list of filepaths"""
+        pdf_filepaths = []
+        non_pdf_filepaths = []
+        for filepath in filepaths:
+            if os.path.splitext(filepath)[1].lower() == ".pdf":
+                pdf_filepaths.append(filepath)
+            else:
+                non_pdf_filepaths.append(filepath)
+        return pdf_filepaths, non_pdf_filepaths
 
     async def __get_non_supported_files(self, filepaths: list[str]) -> list[str]:
         """Get filepaths of non-supported file extensions"""
@@ -1493,18 +1742,22 @@ class NvidiaRAGIngestor:
         self,
         custom_metadata: list[dict[str, Any]],
         collection_name: str,
-        vdb_op: VDBRag,
+        metadata_schema_data: list[dict[str, Any]],
         filepaths: list[str],
     ) -> tuple[bool, list[dict[str, Any]]]:
         """
         Validate custom metadata against schema and return validation status and errors.
 
+        Args:
+            custom_metadata: User-provided metadata
+            collection_name: Name of the collection
+            metadata_schema_data: Metadata schema from VDB
+            filepaths: List of file paths
+
         Returns:
             Tuple[bool, List[Dict[str, Any]]]: (validation_status, validation_errors)
             validation_errors is a list of error dictionaries in the original format
         """
-        # Get the metadata schema from the collection
-        metadata_schema_data = vdb_op.get_metadata_schema(collection_name)
         logger.info(
             f"Metadata schema for collection {collection_name}: {metadata_schema_data}"
         )
@@ -1518,8 +1771,7 @@ class NvidiaRAGIngestor:
             logger.debug(
                 f"Using metadata schema for collection '{collection_name}' with {len(metadata_schema_data)} fields"
             )
-            config = get_config()
-            validator = MetadataValidator(config)
+            validator = MetadataValidator(CONFIG)
             metadata_schema = MetadataSchema(schema=metadata_schema_data)
         else:
             logger.info(
@@ -1680,16 +1932,16 @@ class NvidiaRAGIngestor:
                         .get("subtype")
                     )
                     # Check for tables
-                    if subtype == "table" and self._config.nv_ingest.extract_tables:
+                    if subtype == "table" and CONFIG.nv_ingest.extract_tables:
                         page_content = structured_page_content
                     # Check for charts
-                    elif subtype == "chart" and self._config.nv_ingest.extract_charts:
+                    elif subtype == "chart" and CONFIG.nv_ingest.extract_charts:
                         page_content = structured_page_content
 
                 # For image captions
                 elif (
                     result_element.get("document_type") == "image"
-                    and self._config.nv_ingest.extract_images
+                    and CONFIG.nv_ingest.extract_images
                 ):
                     page_content = (
                         result_element.get("metadata")
@@ -1769,11 +2021,10 @@ class NvidiaRAGIngestor:
         summary_llm_endpoint = CONFIG.summarizer.server_url
         prompts = get_prompts()
 
-        # TODO: Make these parameters configurable
         llm_params = {
             "model": summary_llm_name,
-            "temperature": 0,
-            "top_p": 1.0,
+            "temperature": CONFIG.summarizer.temperature,
+            "top_p": CONFIG.summarizer.top_p,
         }
 
         if summary_llm_endpoint:

@@ -19,8 +19,8 @@ import json
 import os
 import tempfile
 from io import StringIO
-from unittest.mock import patch, mock_open, Mock
 from typing import Optional
+from unittest.mock import Mock, mock_open, patch
 
 import pytest
 import yaml
@@ -42,13 +42,11 @@ class TestNestedConfig(ConfigWizard):
     nested_field: str = configfield(
         "nested_field",
         default="nested_default",
-        help_txt="A nested configuration field"
+        help_txt="A nested configuration field",
     )
 
     nested_int: int = configfield(
-        "nested_int",
-        default=42,
-        help_txt="A nested integer field"
+        "nested_int", default=42, help_txt="A nested integer field"
     )
 
 
@@ -58,9 +56,7 @@ class TestConfig(ConfigWizard):
 
     # Field with default value
     simple_field: str = configfield(
-        "simple_field",
-        default="default_value",
-        help_txt="A simple test field"
+        "simple_field", default="default_value", help_txt="A simple test field"
     )
 
     # Field with custom environment variable name
@@ -68,7 +64,7 @@ class TestConfig(ConfigWizard):
         "custom_env_field",
         default="custom_default",
         env_name="CUSTOM_ENV_VAR",
-        help_txt="Field with custom environment variable"
+        help_txt="Field with custom environment variable",
     )
 
     # Field with env disabled
@@ -76,36 +72,28 @@ class TestConfig(ConfigWizard):
         "no_env_field",
         default="no_env_default",
         env=False,
-        help_txt="Field without environment variable support"
+        help_txt="Field without environment variable support",
     )
 
     # Integer field
-    int_field: int = configfield(
-        "int_field",
-        default=123,
-        help_txt="An integer field"
-    )
+    int_field: int = configfield("int_field", default=123, help_txt="An integer field")
 
     # Boolean field
     bool_field: bool = configfield(
-        "bool_field",
-        default=True,
-        help_txt="A boolean field"
+        "bool_field", default=True, help_txt="A boolean field"
     )
 
     # Float field
     float_field: float = configfield(
-        "float_field",
-        default=3.14,
-        help_txt="A float field"
+        "float_field", default=3.14, help_txt="A float field"
     )
 
     # Nested configuration
     nested: TestNestedConfig = configfield(
         "nested",
         env=False,
-        default=TestNestedConfig(),
-        help_txt="Nested configuration"
+        default_factory=TestNestedConfig,
+        help_txt="Nested configuration",
     )
 
 
@@ -132,10 +120,7 @@ class TestConfigWizard:
             "intField": 456,
             "boolField": False,
             "floatField": 2.71,
-            "nested": {
-                "nestedField": "dict_nested_value",
-                "nestedInt": 100
-            }
+            "nested": {"nestedField": "dict_nested_value", "nestedInt": 100},
         }
 
         config = TestConfig.from_dict(data)
@@ -157,7 +142,7 @@ class TestConfigWizard:
             "APP_BOOLFIELD": "false",
             "APP_FLOATFIELD": "1.23",
             "APP_NESTED_NESTEDFIELD": "env_nested_value",
-            "APP_NESTED_NESTEDINT": "777"
+            "APP_NESTED_NESTEDINT": "777",
         }
 
         with patch.dict(os.environ, env_vars):
@@ -173,9 +158,7 @@ class TestConfigWizard:
     @patch.dict(os.environ, {}, clear=True)
     def test_environment_variables_custom_name(self):
         """Test custom environment variable names."""
-        env_vars = {
-            "CUSTOM_ENV_VAR": "custom_env_value"
-        }
+        env_vars = {"CUSTOM_ENV_VAR": "custom_env_value"}
 
         with patch.dict(os.environ, env_vars):
             config = TestConfig.from_dict({})
@@ -189,7 +172,7 @@ class TestConfigWizard:
             "APP_SIMPLEFIELD": "env_string_value",  # String field gets string value
             "APP_INTFIELD": "42",  # Integer field gets parsed
             "APP_BOOLFIELD": "true",  # Boolean field gets parsed
-            "APP_FLOATFIELD": "3.14159"  # Float field gets parsed
+            "APP_FLOATFIELD": "3.14159",  # Float field gets parsed
         }
 
         with patch.dict(os.environ, env_vars):
@@ -203,9 +186,7 @@ class TestConfigWizard:
     @patch.dict(os.environ, {}, clear=True)
     def test_environment_variables_disabled(self):
         """Test that fields with env=False don't use environment variables."""
-        env_vars = {
-            "APP_NOENVFIELD": "should_not_be_used"
-        }
+        env_vars = {"APP_NOENVFIELD": "should_not_be_used"}
 
         with patch.dict(os.environ, env_vars):
             config = TestConfig.from_dict({})
@@ -224,11 +205,13 @@ class TestConfigWizard:
 
         assert custom_env_entry is not None
         assert custom_env_entry[1] == ("customEnvField",)  # JSON path
-        assert custom_env_entry[2] == str  # Type
+        assert custom_env_entry[2] is str  # Type
 
     def test_invalid_dict_data(self):
         """Test handling of invalid dictionary data."""
-        with pytest.raises(RuntimeError, match="Configuration data is not a dictionary"):
+        with pytest.raises(
+            RuntimeError, match="Configuration data is not a dictionary"
+        ):
             TestConfig.from_dict("not_a_dict")
 
     def test_none_dict_data(self):
@@ -237,6 +220,7 @@ class TestConfigWizard:
 
         # Should use defaults
         assert config.simple_field == "default_value"
+
 
 class TestUtilityFunctions:
     """Test cases for utility functions."""
@@ -293,19 +277,19 @@ class TestUtilityFunctions:
         result = try_json_load('{"key": "value"}')
         assert result == {"key": "value"}
 
-        result = try_json_load('[1, 2, 3]')
+        result = try_json_load("[1, 2, 3]")
         assert result == [1, 2, 3]
 
-        result = try_json_load('42')
+        result = try_json_load("42")
         assert result == 42
 
-        result = try_json_load('true')
+        result = try_json_load("true")
         assert result is True
 
     def test_try_json_load_invalid_json(self):
         """Test JSON loading with invalid JSON string."""
-        result = try_json_load('invalid json')
-        assert result == 'invalid json'  # Should return original string
+        result = try_json_load("invalid json")
+        assert result == "invalid json"  # Should return original string
 
         result = try_json_load('{"incomplete": }')
         assert result == '{"incomplete": }'
@@ -322,13 +306,7 @@ class TestUtilityFunctions:
         data = {}
         update_dict(data, ("level1", "level2", "key"), "value")
 
-        expected = {
-            "level1": {
-                "level2": {
-                    "key": "value"
-                }
-            }
-        }
+        expected = {"level1": {"level2": {"key": "value"}}}
         assert data == expected
 
     def test_update_dict_existing_path(self):
@@ -336,14 +314,7 @@ class TestUtilityFunctions:
         data = {"level1": {"level2": {"existing": "old_value"}}}
         update_dict(data, ("level1", "level2", "key"), "new_value")
 
-        expected = {
-            "level1": {
-                "level2": {
-                    "existing": "old_value",
-                    "key": "new_value"
-                }
-            }
-        }
+        expected = {"level1": {"level2": {"existing": "old_value", "key": "new_value"}}}
         assert data == expected
 
     def test_update_dict_overwrite_false(self):
@@ -418,17 +389,19 @@ class TestConfigWizardErrorHandling:
 
     def test_from_file_file_not_found(self):
         """Test from_file with file not found."""
-        with patch('builtins.open', side_effect=FileNotFoundError):
-            with patch('nvidia_rag.utils.configuration_wizard._LOGGER') as mock_logger:
+        with patch("builtins.open", side_effect=FileNotFoundError):
+            with patch("nvidia_rag.utils.configuration_wizard._LOGGER") as mock_logger:
                 result = TestConfig.from_file("nonexistent.json")
 
                 assert result is None
-                mock_logger.error.assert_called_with("The configuration file cannot be found.")
+                mock_logger.error.assert_called_with(
+                    "The configuration file cannot be found."
+                )
 
     def test_from_file_permission_denied(self):
         """Test from_file with permission denied."""
-        with patch('builtins.open', side_effect=PermissionError):
-            with patch('nvidia_rag.utils.configuration_wizard._LOGGER') as mock_logger:
+        with patch("builtins.open", side_effect=PermissionError):
+            with patch("nvidia_rag.utils.configuration_wizard._LOGGER") as mock_logger:
                 result = TestConfig.from_file("restricted.json")
 
                 assert result is None
@@ -443,10 +416,13 @@ class TestConfigWizardErrorHandling:
         mock_file.seekable.return_value = True
         mock_file.seek.return_value = 0
 
-        with patch('builtins.open', return_value=mock_file):
-            with patch('nvidia_rag.utils.configuration_wizard._LOGGER') as mock_logger:
+        with patch("builtins.open", return_value=mock_file):
+            with patch("nvidia_rag.utils.configuration_wizard._LOGGER") as mock_logger:
                 # The read_json_or_yaml function should raise ValueError for invalid JSON
-                with patch('nvidia_rag.utils.configuration_wizard.read_json_or_yaml', side_effect=ValueError("Invalid JSON")):
+                with patch(
+                    "nvidia_rag.utils.configuration_wizard.read_json_or_yaml",
+                    side_effect=ValueError("Invalid JSON"),
+                ):
                     result = TestConfig.from_file("invalid.json")
 
                     # When data is None, the code creates a default config with cls.from_dict({})
@@ -467,13 +443,16 @@ class TestConfigWizardErrorHandling:
         mock_file.seekable.return_value = True
         mock_file.seek.return_value = 0
 
-        with patch('builtins.open', return_value=mock_file):
-            with patch('nvidia_rag.utils.configuration_wizard._LOGGER') as mock_logger:
+        with patch("builtins.open", return_value=mock_file):
+            with patch("nvidia_rag.utils.configuration_wizard._LOGGER") as mock_logger:
                 # Mock read_json_or_yaml to return valid data, but from_dict will fail
-                with patch('nvidia_rag.utils.configuration_wizard.read_json_or_yaml', return_value={"test_field": "value"}):
+                with patch(
+                    "nvidia_rag.utils.configuration_wizard.read_json_or_yaml",
+                    return_value={"test_field": "value"},
+                ):
                     # Create a proper ParseError instance
                     parse_error = errors.ParseError("test_field", str, "Parsing error")
-                    with patch.object(TestConfig, 'from_dict', side_effect=parse_error):
+                    with patch.object(TestConfig, "from_dict", side_effect=parse_error):
                         result = TestConfig.from_file("valid.json")
 
                         assert result is None
@@ -490,12 +469,16 @@ class TestConfigWizardErrorHandling:
         # Create a config with embedded config
         @configclass
         class EmbeddedConfig(ConfigWizard):
-            embedded_field: str = configfield("embedded_field", default="embedded_default")
+            embedded_field: str = configfield(
+                "embedded_field", default="embedded_default"
+            )
 
         @configclass
         class ParentConfig(ConfigWizard):
             parent_field: str = configfield("parent_field", default="parent_default")
-            embedded: EmbeddedConfig = configfield("embedded", default_factory=EmbeddedConfig)
+            embedded: EmbeddedConfig = configfield(
+                "embedded", default_factory=EmbeddedConfig
+            )
 
         ParentConfig.print_help(mock_help_printer)
 
@@ -504,14 +487,19 @@ class TestConfigWizardErrorHandling:
 
     def test_envvars_with_embedded_config(self):
         """Test envvars with embedded configuration."""
+
         @configclass
         class EmbeddedConfig(ConfigWizard):
-            embedded_field: str = configfield("embedded_field", default="embedded_default")
+            embedded_field: str = configfield(
+                "embedded_field", default="embedded_default"
+            )
 
         @configclass
         class ParentConfig(ConfigWizard):
             parent_field: str = configfield("parent_field", default="parent_default")
-            embedded: EmbeddedConfig = configfield("embedded", default_factory=EmbeddedConfig)
+            embedded: EmbeddedConfig = configfield(
+                "embedded", default_factory=EmbeddedConfig
+            )
 
         # Test with the actual classes
         parent_env_vars = ParentConfig.envvars()
@@ -531,12 +519,11 @@ class TestConfigWizardErrorHandling:
 
     def test_envvars_custom_env_name(self):
         """Test envvars with custom environment variable names."""
+
         @configclass
         class CustomEnvConfig(ConfigWizard):
             custom_field: str = configfield(
-                "custom_field",
-                default="custom_default",
-                env_name="CUSTOM_ENV_VAR"
+                "custom_field", default="custom_default", env_name="CUSTOM_ENV_VAR"
             )
 
         env_vars = CustomEnvConfig.envvars()
@@ -547,12 +534,11 @@ class TestConfigWizardErrorHandling:
 
     def test_envvars_disabled_env(self):
         """Test envvars with environment variable disabled."""
+
         @configclass
         class DisabledEnvConfig(ConfigWizard):
             disabled_field: str = configfield(
-                "disabled_field",
-                default="disabled_default",
-                env=False
+                "disabled_field", default="disabled_default", env=False
             )
 
         env_vars = DisabledEnvConfig.envvars()

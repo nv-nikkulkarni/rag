@@ -37,7 +37,11 @@ from langchain_core.documents import Document
 from pydantic import BaseModel, Field, validator
 from pymilvus.exceptions import MilvusException, MilvusUnavailableException
 
-from nvidia_rag.utils.minio_operator import get_minio_operator, get_unique_thumbnail_id
+from nvidia_rag.utils.minio_operator import (
+    get_minio_operator,
+    get_unique_thumbnail_id,
+    get_unique_thumbnail_id_from_result,
+)
 from observability.otel_metrics import OtelMetrics
 
 
@@ -517,10 +521,10 @@ def generate_answer(
             chain_response.object = "chat.completion.chunk"
             chain_response.created = int(time.time())
             logger.debug(response_choice)
-            yield "data: " + str(chain_response.json()) + "\n\n"
+            yield "data: " + str(chain_response.model_dump_json()) + "\n\n"
         else:
             chain_response = ChainResponse()
-            yield "data: " + str(chain_response.json()) + "\n\n"
+            yield "data: " + str(chain_response.model_dump_json()) + "\n\n"
 
     except (MilvusException, MilvusUnavailableException) as e:
         exception_msg = (
@@ -533,7 +537,7 @@ def generate_answer(
             e,
             exc_info=logger.getEffectiveLevel() <= logging.DEBUG,
         )
-        yield error_response_generator(exception_msg)
+        yield from error_response_generator(exception_msg)
 
     except Exception as e:
         logger.error(
@@ -541,7 +545,7 @@ def generate_answer(
             e,
             exc_info=logger.getEffectiveLevel() <= logging.DEBUG,
         )
-        yield error_response_generator(FALLBACK_EXCEPTION_MSG)
+        yield from error_response_generator(FALLBACK_EXCEPTION_MSG)
 
 
 def prepare_citations(
@@ -584,9 +588,12 @@ def prepare_citations(
             ]:
                 content = doc.page_content
                 document_type = doc.metadata.get("content_metadata", {}).get("type")
+                content_metadata = doc.metadata.get("content_metadata", {})
+                page_number = content_metadata.get("page_number", 0)
                 source_metadata = SourceMetadata(
+                    page_number=page_number,
                     description=doc.page_content,
-                    content_metadata=doc.metadata.get("content_metadata"),
+                    content_metadata=content_metadata,
                 )
 
             elif doc.metadata.get("content_metadata", {}).get("type", {}) in [
@@ -609,11 +616,12 @@ def prepare_citations(
                         logger.debug(
                             "Pulling content from minio for image/table/chart for citations ..."
                         )
-                        unique_thumbnail_id = get_unique_thumbnail_id(
+                        unique_thumbnail_id = get_unique_thumbnail_id_from_result(
                             collection_name=doc.metadata.get("collection_name"),
                             file_name=file_name,
                             page_number=page_number,
                             location=location,
+                            metadata=doc.metadata,
                         )
                         payload = get_minio_operator_instance().get_payload(
                             object_name=unique_thumbnail_id

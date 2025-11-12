@@ -11,6 +11,7 @@ services:
       KNOWHERE_GPU_MEM_POOL_SIZE: 2048;4096
     volumes:
       - ${DOCKER_VOLUME_DIRECTORY:-.}/volumes/milvus:/var/lib/milvus
+      # - ${MILVUS_CONFIG_FILE:-./milvus.yaml}:/milvus/configs/milvus.yaml
     # healthcheck:
     #   test: ["CMD", "curl", "-f", "http://localhost:9091/healthz"]
     #   interval: 30s
@@ -89,9 +90,12 @@ services:
       - xpack.license.self_generated.type=basic
       - network.host=0.0.0.0
       - cluster.routing.allocation.disk.threshold_enabled=false
+      # - ELASTIC_USERNAME=${APP_VECTORSTORE_USERNAME}
+      # - ELASTIC_PASSWORD=${APP_VECTORSTORE_PASSWORD}
     hostname: elasticsearch
     healthcheck:
       test: ["CMD", "curl", "-s", "-f", "http://localhost:9200/_cat/health"]
+      # test: ["CMD", "curl", "-s", "-f", "-u", "${APP_VECTORSTORE_USERNAME}:${APP_VECTORSTORE_PASSWORD}", "http://localhost:9200/_cat/health"]
       interval: 10s
       timeout: 1s
       retries: 10
